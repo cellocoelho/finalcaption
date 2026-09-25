@@ -720,7 +720,7 @@ function barSlider(label, value, min, max, step, onChange, fmt = (v) => v, { liv
     const x = Math.max(8, Math.min(W - 8, p * W - Math.sign(p - z) * dentro));
     mark.style.left = `${(x / W) * 100}%`;
     // e some quando passaria por cima do nome ou do valor
-    const cobre = (el) => x > el.offsetLeft - 6 && x < el.offsetLeft + el.offsetWidth + 6;
+    const cobre = (el) => x >= el.offsetLeft - 8 && x <= el.offsetLeft + el.offsetWidth + 8;
     mark.classList.toggle('sob', cobre(name) || cobre(out));
   };
   const input = h('input', {
@@ -1112,7 +1112,6 @@ function renderStyleBody() {
 // ---------------------------------------------------------------- aba Hooks
 
 let hookWord = null;   // palavra do hook sendo ajustada
-let hookAnimAberta = false;   // animação e velocidade aparecem depois de clicar num layout
 let hookThumbs = [];          // miniaturas dos layouts: { cv, layout }
 
 // frase fixa das miniaturas, com "brown" em destaque, para comparar só o layout
@@ -1234,20 +1233,18 @@ function renderHooksBody() {
     const cv = h('canvas', { width: 216, height: 270 });
     hookThumbs.push({ cv, layout: v });
     return h('button', { type: 'button', class: 'hook-layout', 'aria-pressed': String(v === hk.layout),
-      title: v === hk.layout ? 'Clique para ver a animação' : `Usar o layout ${nome}`,
-      onclick: () => {
-        if (v === hk.layout) hookAnimAberta = !hookAnimAberta;
-        else { patchHook({ layout: v }); hookAnimAberta = true; }
-        rerender();
-      } }, cv, h('span', null, nome));
+      title: `Usar o layout ${nome}`,
+      onclick: () => { if (v !== hk.layout) { patchHook({ layout: v }); rerender(); } } }, cv, h('span', null, nome));
   }));
   pintaThumbs();
 
-  const animacao = hookAnimAberta ? h('div', { class: 'hook-anim' },
-    h('div', { class: 'hook-anims' }, HOOK_ANIMS.map(([v, nome]) =>
-      chip(nome, v === hk.anim, () => patchHook({ anim: v })))),
+  // escolher a animação toca o hook do começo, para ver a entrada das palavras
+  const animacao = h('div', { class: 'hook-anim' },
+    linha('Animação', h('select', { class: 'pick', 'aria-label': 'Animação de entrada',
+      onchange: (e) => { patchHook({ anim: e.target.value }); seek(hk.start); video.play().catch(() => {}); } },
+      HOOK_ANIMS.map(([v, nome]) => h('option', { value: v, selected: v === hk.anim }, nome)))),
     barSlider('Velocidade', hk.speed, 0.4, 2.5, 0.1, (v) => patchHook({ speed: v }, 'speed'),
-      (v) => `${v.toFixed(1)}×`, { origin: 1 })) : null;
+      (v) => `${v.toFixed(1)}×`, { origin: 1 }));
 
   const layoutTemBox = runs.some((r) => r.grifo || r.pilula);
   const contorno = hk.stroke !== false;

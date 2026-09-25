@@ -216,8 +216,8 @@ Um hook é uma frase de destaque, animada, que substitui as legendas de um trech
 - `tick()` repinta a prévia a cada quadro enquanto o playhead está dentro de um hook.
 - Painel: o layout se escolhe por **miniaturas** (`pintaThumbs`: fundo preto e a frase fixa "The quick brown
   fox jumps" com "brown" em destaque; usam as cores, fontes e contorno do hook, sem o bojo;
-  animação forçada em `pop` no fim para mostrar tudo parado). Animação e velocidade só aparecem
-  depois de clicar numa miniatura (`hookAnimAberta`). As barras são `barSlider`, versão fina
+  animação forçada em `pop` no fim para mostrar tudo parado). Logo abaixo, sempre visíveis, o menu
+  "Animação" (entrada das palavras; escolher toca o hook do começo) e a barra de velocidade. As barras são `barSlider`, versão fina
   (40 px, CSS em `.hook-editor .bar`).
 - Cor das letras e cor do box são separadas: `hook.color` é o destaque/box, `hook.boxInk` o texto
   dentro do box (padrão `#141414`); por palavra, `cor` = letras e `fundo` = box. `hookRuns(hook)`
