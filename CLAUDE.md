@@ -143,6 +143,10 @@ O que cada módulo contém:
 
 ### Estilo
 
+- `tracking` é o espaço entre letras em % do tamanho da fonte (`ctx.letterSpacing`, só no Chrome;
+  `measureText` já conta) e `lineHeight` o espaço entre linhas em múltiplos do tamanho (padrão
+  1,18). No FCPXML viram `tracking` (em pontos) e `lineSpacing` (% a partir de 1,18) — este último
+  é aproximação, porque o padrão do Final Cut não é o mesmo.
 - Tamanhos em px numa altura de referência de 1080. `posY` é a porcentagem a partir do topo e
   `posX` a porcentagem a partir da esquerda (50 = centro). Fora do centro, `drawCaption` encolhe a
   largura de quebra para o texto não sair do quadro.
@@ -207,8 +211,9 @@ O painel da direita segue uma linguagem própria, tirada das referências do Cel
 - cada controle é um bloco de 64 px de altura, não uma linha espremida;
 - os sliders são a barra inteira (`.bar`): um `input[type=range]` invisível por cima, `.bar-fill`
   desenha o preenchimento (com `min-width` para o traço não cair em cima do rótulo), nome à
-  esquerda e valor à direita. Use `barSlider()`;
-- `.hero` resume o estilo atual: fonte, círculo da cor, peso, contorno e o tamanho em número grande;
+  esquerda e valor à direita. Use `barSlider()`. **Quando a mudança remonta o painel** (os
+  parâmetros de divisão, que chamam `regroup`), passe `{ live: false }`: senão o próprio input é
+  destruído no primeiro evento do arraste e o slider fica travado;
 - na lista, a legenda clicada fica amarela e mostra os quatro ícones de ação. Não existe barra de
   ações no rodapé — foi decisão do Cello.
 
