@@ -179,8 +179,8 @@ button { cursor: pointer; }
 }
 .tl-inner { position: relative; height: 100%; min-width: 100%; cursor: text; }
 .tl-wave { position: sticky; left: 0; display: block; height: 100%; pointer-events: none; }
-/* altura fixa: crescer a linha do tempo dá mais espaço para a onda, não estica os blocos */
-.tl-blocks { position: absolute; left: 0; right: 0; top: 12px; height: 48px; }
+/* altura fixa; o `top` vem do JS para o conjunto ficar centrado com folga em cima e embaixo */
+.tl-blocks { position: absolute; left: 0; right: 0; top: var(--tl-pad, 12px); height: 48px; }
 .tl-block {
   position: absolute; top: 0; height: 100%;
   cursor: grab; touch-action: none;

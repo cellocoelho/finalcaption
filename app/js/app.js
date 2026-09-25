@@ -25,8 +25,10 @@ const state = {
   fonts: [],             // fontes .ttf/.otf enviadas pelo usuário
 };
 
-const TL_MIN = 92, TL_MAX = 560, TL_DEFAULT = 150;
-const WAVE_MAX_H = 96, WAVE_PAD = 12;   // altura máxima da onda e folga mínima em volta
+const TL_MIN = 120, TL_MAX = 560, TL_DEFAULT = 150;
+const WAVE_MAX_H = 96;   // altura máxima da onda
+const TL_PAD = 12;       // folga mínima em cima e embaixo
+const TL_GAP = 14;       // espaço entre os blocos e a onda
 
 // Área segura da Meta para 9:16 (medidas de 1080x1920): topo 14%, laterais 6%,
 // rodapé 35% no Reels (curtidas, comentários, legenda) e 20% no Stories (barra de resposta).
@@ -1185,6 +1187,24 @@ function renderTimeline() {
   drawWave();
 }
 
+/**
+ * Nada estica: os blocos têm altura fixa (CSS) e a onda tem teto. Crescer a linha do
+ * tempo só abre respiro, dividido igualmente em cima e embaixo do conjunto.
+ */
+let lastPad = null;
+function layoutTimeline() {
+  const hgt = timeline.clientHeight;
+  if (!hgt) return null;
+  const blockH = tlBlocks.offsetHeight || 48;
+  const waveH = clamp(hgt - TL_PAD * 2 - blockH - TL_GAP, 16, WAVE_MAX_H);
+  const pad = Math.max(TL_PAD, Math.round((hgt - (blockH + TL_GAP + waveH)) / 2));
+  if (pad !== lastPad) {
+    lastPad = pad;
+    app.style.setProperty('--tl-pad', `${pad}px`);
+  }
+  return { pad, blockH, waveH };
+}
+
 function drawWave() {
   const dpr = window.devicePixelRatio || 1;
   const w = timeline.clientWidth, hgt = timeline.clientHeight;
@@ -1197,13 +1217,10 @@ function drawWave() {
   ctx.clearRect(0, 0, w, hgt);
   if (!state.peaks) return;
   ctx.fillStyle = '#cfcfd6';
-  // Nada estica: blocos e onda têm altura fixa. Crescer a linha do tempo só abre
-  // respiro — a onda fica centrada na área livre embaixo dos blocos.
-  const top = tlBlocks.offsetTop + tlBlocks.offsetHeight;
-  const area = Math.max(0, hgt - top);
-  const waveH = Math.max(16, Math.min(WAVE_MAX_H, area - WAVE_PAD * 2));
-  const mid = top + area / 2;
-  const amp = waveH / 2;
+  const box = layoutTimeline();
+  if (!box) return;
+  const mid = box.pad + box.blockH + TL_GAP + box.waveH / 2;
+  const amp = box.waveH / 2;
   const scroll = timeline.scrollLeft;
   for (let x = 0; x < w; x += 2) {
     const b0 = Math.floor(((scroll + x) / state.zoom) * 100);
@@ -1362,6 +1379,7 @@ function bindTimeline() {
 
 function applyTimelineHeight() {
   app.style.setProperty('--tl-h', `${state.tlHeight}px`);
+  layoutTimeline();
 }
 
 function bindTimelineGrip() {

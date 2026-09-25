@@ -49,7 +49,8 @@ Legendas
     em qualquer ponto dela e arraste para cima ou para baixo. Ela cresce até ocupar
     boa parte da janela. Dois cliques na alça volta ao tamanho normal.
     Nada é esticado: os blocos de legenda e a onda do áudio ficam sempre do mesmo
-    tamanho. O espaço que você abre vira respiro em volta da onda.
+    tamanho. O espaço que você abre vira respiro, dividido igualmente em cima e
+    embaixo do conjunto.
   - Passe o mouse por cima da linha do tempo (sem clicar) e o vídeo mostra aquele
     ponto na hora, igual ao Final Cut. A linha amarela é onde o mouse está; a preta
     é onde a reprodução está de verdade. Tirando o mouse, volta para a preta.
