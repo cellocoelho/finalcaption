@@ -589,11 +589,11 @@ function captionsHead() {
   const params = [];
   if (s.mode === 'words') {
     params.push(barSlider('Palavras', s.wordsPerCaption, 1, 12, 1,
-      (v) => regroup({ wordsPerCaption: v }), (v) => `${v} por legenda`));
+      (v) => regroup({ wordsPerCaption: v }), (v) => `${v} por legenda`, { live: false }));
   } else if (s.mode === 'lines') {
     params.push(
-      barSlider('Letras por linha', s.maxCharsPerLine, 10, 60, 2, (v) => regroup({ maxCharsPerLine: v })),
-      barSlider('Linhas', s.maxLines, 1, 3, 1, (v) => regroup({ maxLines: v })));
+      barSlider('Letras por linha', s.maxCharsPerLine, 10, 60, 2, (v) => regroup({ maxCharsPerLine: v }), (v) => v, { live: false }),
+      barSlider('Linhas', s.maxLines, 1, 3, 1, (v) => regroup({ maxLines: v }), (v) => v, { live: false }));
   }
 
   const more = h('button', { class: 'icon-btn more-btn', type: 'button', 'aria-label': 'Mais opções', html: ICONS.more,
@@ -662,19 +662,21 @@ function runReplace() {
 }
 
 /** Bloco-slider: a barra inteira é o controle, como nas referências. */
-function barSlider(label, value, min, max, step, onChange, fmt = (v) => v) {
+/**
+ * Bloco-slider: a barra inteira é o controle.
+ * `live: false` só avisa quando o usuário solta — necessário quando a mudança remonta
+ * o painel (a divisão das legendas), senão o próprio input some no meio do arraste.
+ */
+function barSlider(label, value, min, max, step, onChange, fmt = (v) => v, { live = true } = {}) {
   const pct = (v) => `${Math.max(0, Math.min(100, ((v - min) / (max - min)) * 100))}%`;
   const fill = h('span', { class: 'bar-fill' });
   fill.style.width = pct(value);
   const out = h('span', { class: 'bar-value' }, String(fmt(value)));
+  const paint = (v) => { fill.style.width = pct(v); out.textContent = String(fmt(v)); };
   const input = h('input', {
     type: 'range', min, max, step, value: String(value), 'aria-label': label,
-    oninput: (e) => {
-      const v = +e.target.value;
-      fill.style.width = pct(v);
-      out.textContent = String(fmt(v));
-      onChange(v);
-    },
+    oninput: (e) => { const v = +e.target.value; paint(v); if (live) onChange(v); },
+    onchange: (e) => { if (!live) onChange(+e.target.value); },
   });
   return h('label', { class: 'bar' }, input, fill, h('span', { class: 'bar-name' }, label), out);
 }
@@ -1021,24 +1023,14 @@ function renderStyleBody() {
     } }, cv, p.name);
   }));
 
-  const weightName = (WEIGHTS.find(([w]) => w === st.weight) || [0, '—'])[1];
-  const hero = h('div', { class: 'hero' },
-    h('div', { class: 'hero-top' },
-      h('h3', null, st.font),
-      h('span', { class: 'hero-dot', style: `background:${st.color}` })),
-    h('div', { class: 'hero-bot' },
-      h('div', { class: 'hero-metas' },
-        h('div', { class: 'hero-meta' }, h('i', null, 'Peso'), h('b', null, weightName)),
-        h('div', { class: 'hero-meta' }, h('i', null, 'Contorno'), h('b', null, st.stroke ? String(st.strokeWidth) : 'sem'))),
-      h('div', { class: 'hero-size' }, String(Math.round(st.size)), h('sup', null, 'px'))));
-
   return h('div', { class: 'style-body' },
-    hero,
     presets,
     fontSelect,
     fontChips,
     segmented(WEIGHTS.map(([w, n]) => [w, n]), st.weight, (v) => { applyStyle({ weight: v }); rerender(); }, 'Peso'),
     bar('Tamanho', 'size', 24, 180, 1),
+    bar('Entre letras', 'tracking', -5, 30, 0.5, (v) => `${v}%`),
+    bar('Entre linhas', 'lineHeight', 0.9, 2.2, 0.02, (v) => v.toFixed(2)),
     h('div', { class: 'opt' }, h('span', null, 'Cor'), swatches('color')),
     toggle('stroke', 'Contorno'),
     st.stroke ? bar('Espessura', 'strokeWidth', 1, 16, 0.5) : null,

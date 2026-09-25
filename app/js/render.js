@@ -38,6 +38,8 @@ export function drawCaption(ctx, W, H, text, st) {
   const px = Math.max(4, st.size * scale);
   ctx.save();
   ctx.font = fontCss(st, px);
+  // espaço entre letras: o Chrome tem ctx.letterSpacing; measureText já leva em conta
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${(((st.tracking ?? 0) / 100) * px).toFixed(2)}px`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
@@ -47,7 +49,7 @@ export function drawCaption(ctx, W, H, text, st) {
   // fora do centro, a largura da quebra encolhe para o texto não sair do quadro
   const maxW = Math.max(W * 0.3, Math.min(W * 0.9, 2 * Math.min(cx, W - cx)));
   const lines = layoutLines(ctx, content, maxW);
-  const lineH = px * 1.18;
+  const lineH = px * (st.lineHeight ?? 1.18);
   const cy = (st.posY / 100) * H;
   const top = cy - (lineH * lines.length) / 2 + lineH / 2;
 

@@ -72,6 +72,9 @@ Estilo
     escolher várias; ⇧-clique para um intervalo).
   - Arraste a legenda direto no vídeo para posicionar: para cima e para baixo e
     também para os lados. Em Posição há os dois controles e o botão "Centralizar".
+  - "Entre letras" abre ou fecha o espaço entre as letras; "Entre linhas" faz o
+    mesmo com legendas de duas linhas. Os dois vão para o MP4 e para o Final Cut
+    (no Final Cut o espaço entre linhas pode sair um pouco diferente).
   - Fonte: além das da lista, escolha "Enviar fonte do computador (.ttf/.otf)…" e
     escolha o arquivo (ou arraste o .ttf/.otf para a janela do app). A fonte fica
     guardada e vale para a prévia e para o MP4. O × ao lado do nome remove.

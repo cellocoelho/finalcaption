@@ -5,6 +5,8 @@ export const DEFAULT_STYLE = Object.freeze({
   font: 'Helvetica Neue',
   weight: 700,
   size: 72,            // px numa altura de referência de 1080
+  tracking: 0,         // espaço entre letras, em % do tamanho da fonte
+  lineHeight: 1.18,    // espaço entre linhas, em múltiplos do tamanho da fonte
   color: '#FFFFFF',
   stroke: true,
   strokeColor: '#000000',
@@ -401,12 +403,16 @@ export function toFCPXML({ caps, style, fpsOption, width, height, duration, proj
       ? ` strokeColor="${rgba(st.strokeColor)}" strokeWidth="${num(-st.strokeWidth)}"`
       : '';
     const shadowAttrs = st.shadow ? ` shadowColor="0 0 0 0.75" shadowOffset="4 315" shadowBlurRadius="6"` : '';
+    // tracking em pontos; lineSpacing em % a partir do padrão do app (1,18)
+    const track = ((st.tracking ?? 0) / 100) * st.size;
+    const spacing = ((st.lineHeight ?? 1.18) - 1.18) * 100;
+    const spaceAttrs = (track ? ` tracking="${num(track)}"` : '') + (Math.abs(spacing) > 0.5 ? ` lineSpacing="${num(spacing)}"` : '');
     titles.push(
       `              <title ref="r2" lane="1" offset="${off(s)}" name="${esc(text.replace(/\n/g, ' ').slice(0, 60))}" start="3600s" duration="${t(e - s)}">\n` +
       `                <param name="Position" key="${POSITION_KEY}" value="${num(posXPx)} ${num(posPx)}"/>\n` +
       `                <text>\n                  <text-style ref="fcts${tsIndex}">${esc(text)}</text-style>\n                </text>\n` +
       `                <text-style-def id="fcts${tsIndex}">\n` +
-      `                  <text-style font="${esc(st.font)}" fontSize="${num(st.size)}" fontFace="${esc(faceName(st.font, st.weight))}" fontColor="${rgba(st.color)}" alignment="center"${strokeAttrs}${shadowAttrs}/>\n` +
+      `                  <text-style font="${esc(st.font)}" fontSize="${num(st.size)}" fontFace="${esc(faceName(st.font, st.weight))}" fontColor="${rgba(st.color)}" alignment="center"${spaceAttrs}${strokeAttrs}${shadowAttrs}/>\n` +
       `                </text-style-def>\n` +
       `              </title>`,
     );
