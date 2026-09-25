@@ -56,6 +56,7 @@ app/js/core.js                lógica pura, sem DOM (testável no Node)
 app/js/render.js              drawCaption: desenha a legenda num canvas
 app/js/media.js               mediabunny: probe, extractAudio, exportBurnedIn
 app/js/fonts.js               fontes .ttf/.otf enviadas: lê o nome real, registra e guarda no IndexedDB
+app/js/hooks.js               hooks: layouts tipográficos, animações e a lente (bulge)
 app/js/store.js               projetos salvos no IndexedDB: legendas, miniatura e atalho para o arquivo
 app/js/transcriber.js         divide o áudio, gerencia o worker, junta as palavras
 app/js/worker.js              Web Worker com o pipeline do Whisper
@@ -92,6 +93,7 @@ O que cada módulo contém:
   - aba Estilo com escopo "Todas as legendas" ou "Selecionadas";
   - buscar e substituir: com algo na busca, aparece a linha "Trocar por…" com a contagem de
     ocorrências; `runReplace` troca em todas as legendas de uma vez (um único `pushUndo`);
+  - aba Hooks com uma sub-aba por hook (ver a seção Hooks);
   - linha do tempo com forma de onda, blocos e bordas arrastáveis;
   - a altura da linha do tempo é ajustável pela alça `#tlGrip` (120 px até 70% da janela, no máximo
     560; duplo clique volta a 150). A faixa de pegada é a largura toda, 18 px de altura. **Nada
@@ -191,6 +193,30 @@ O que cada módulo contém:
   — que precisa ser chamado **antes** de qualquer `await`, senão o DataTransfer expira.
 - `saveNow` é assíncrono, então o `beforeunload` não serve: salvamos em `visibilitychange` e
   `pagehide`.
+
+### Hooks
+
+Um hook é uma frase de destaque, animada, que substitui as legendas de um trecho.
+
+- Nasce da seleção: `createHook()` junta o texto das legendas selecionadas. **As legendas não são
+  alteradas** — `semHook(c)` calcula na hora se a legenda cai dentro de algum hook. Por isso
+  apagar o hook devolve tudo sozinho, e arrastar as bordas muda quem fica coberto.
+- `hooks.js` traz `drawHook(ctx, W, H, hook, t)`, com `t` em segundos desde o começo do hook. É a
+  mesma função na prévia e no MP4, como `drawCaption`.
+- Três camadas independentes, de propósito (foi pedido assim): **layout** tipográfico, **animação**
+  de entrada e a **lente**. Qualquer combinação vale.
+- A lente (bulge) é distorção de verdade, pixel a pixel: o texto vai para um canvas à parte e a
+  imagem é remapeada. Detalhes que custaram caro:
+  - a curva é um sino (`encolhe`), plana no miolo e caindo de leve. **É a variação da ampliação que
+    entorta a letra** — ampliação uniforme só faz zoom e não deforma nada;
+  - `posicionaCabendo` monta, simula onde o texto vai parar e encolhe até caber. Estimar por
+    fórmula não funciona, porque o layout reexpande as linhas para preencher a largura;
+  - o texto é desenhado num canvas `SS` vezes maior e amostrado dali, senão borra ao ampliar;
+  - custo medido: ~7 ms/quadro na prévia, ~52 ms em 1080×1920. Só a área com texto é processada.
+- `tick()` repinta a prévia a cada quadro enquanto o playhead está dentro de um hook.
+- Nas exportações, `timeline(caps, hooks)` (em `core.js`) junta tudo em ordem, com os hooks no
+  lugar das legendas cobertas. No **FCPXML o hook vira um title parado** — o Basic Title não anima
+  palavra a palavra nem deforma; a janela de exportação avisa.
 
 ### Exportação MP4
 

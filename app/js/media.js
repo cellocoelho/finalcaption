@@ -6,6 +6,7 @@ import {
 } from '../vendor/mediabunny.js';
 import { captionAt, effectiveStyle } from './core.js';
 import { drawCaption } from './render.js';
+import { drawHook, hookAt } from './hooks.js';
 
 export async function probe(file) {
   const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(file) });
@@ -94,7 +95,7 @@ export async function extractAudio(file, { onProgress, signal } = {}) {
  */
 export const VIDEO_CODECS = ['avc', 'hevc']; // H.264 primeiro (abre em qualquer lugar), HEVC como reserva
 
-export async function exportBurnedIn(file, { captions, style, writable, onProgress, signal, width, height }) {
+export async function exportBurnedIn(file, { captions, style, hooks = [], writable, onProgress, signal, width, height }) {
   let codec = null;
   for (const c of VIDEO_CODECS) {
     if (await canEncodeVideo(c, { width, height })) { codec = c; break; }
@@ -119,8 +120,18 @@ export async function exportBurnedIn(file, { captions, style, writable, onProgre
             ctx = canvas.getContext('2d');
           }
           sample.draw(ctx, 0, 0, w, h);
-          const i = captionAt(captions, sample.timestamp + 1e-4);
-          if (i >= 0) drawCaption(ctx, w, h, captions[i].text, effectiveStyle(captions[i], style));
+          const t = sample.timestamp + 1e-4;
+          const hk = hookAt(hooks, t);
+          if (hk) {
+            drawHook(ctx, w, h, hk, t - hk.start);
+          } else {
+            const i = captionAt(captions, t);
+            const c = i >= 0 ? captions[i] : null;
+            // legendas cobertas por um hook não entram
+            if (c && !hooks.some((x) => c.start < x.end - 0.01 && c.end > x.start + 0.01)) {
+              drawCaption(ctx, w, h, c.text, effectiveStyle(c, style));
+            }
+          }
           return canvas;
         },
       },

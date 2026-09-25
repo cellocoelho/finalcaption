@@ -5,6 +5,7 @@ import { probe, extractAudio, exportBurnedIn } from './media.js';
 import { transcribe, MODELS, LANGUAGES, SAMPLE_RATE } from './transcriber.js';
 import { loadStoredFonts, addFont, removeFont } from './fonts.js';
 import { listProjects, getProject, saveProject, deleteProject, fileFromHandle, migrateOldProjects } from './store.js';
+import { drawHook, hookAt, wordsOf, HOOK_LAYOUTS, HOOK_ANIMS, HOOK_COLORS, DEFAULT_HOOK } from './hooks.js';
 
 // ---------------------------------------------------------------- estado
 
@@ -12,7 +13,7 @@ const state = {
   file: null, fileKey: null, fileHandle: null, thumb: null, url: null, info: null,
   audio: null,           // { promise, progress, error, samples }
   peaks: null,           // Float32Array, 100 valores por segundo
-  transcript: [], captions: [],
+  transcript: [], captions: [], hooks: [], hookId: null,
   style: { ...C.DEFAULT_STYLE }, seg: { ...C.DEFAULT_SEGMENTATION },
   language: 'pt', modelKey: 'balanced',
   tab: 'captions', styleScope: 'all', search: '',
@@ -63,6 +64,7 @@ const panel = $('panel');
 const timeline = $('timeline');
 const tlInner = $('tlInner');
 const tlBlocks = $('tlBlocks');
+const tlHooks = $('tlHooks');
 const tlWave = $('tlWave');
 const tlPlayhead = $('tlPlayhead');
 const tlSkimmer = $('tlSkimmer');
@@ -172,6 +174,7 @@ async function saveNow() {
     duration: duration() || prev?.duration || 0,
     transcript: state.transcript,
     captions: state.captions,
+    hooks: state.hooks,
     style: state.style, seg: state.seg, language: state.language,
     handle: state.fileHandle || prev?.handle || null,
     thumb: state.thumb || prev?.thumb || null,
@@ -181,7 +184,7 @@ async function saveNow() {
 
 // ---------------------------------------------------------------- desfazer
 
-const snapshot = () => JSON.stringify({ captions: state.captions, style: state.style });
+const snapshot = () => JSON.stringify({ captions: state.captions, style: state.style, hooks: state.hooks });
 let lastUndoTag = null, lastUndoAt = 0;
 
 function pushUndo(tag = null) {
@@ -202,6 +205,8 @@ function restore(snap) {
   const s = JSON.parse(snap);
   state.captions = s.captions;
   state.style = s.style;
+  state.hooks = s.hooks || [];
+  if (!state.hooks.some((h) => h.id === state.hookId)) state.hookId = state.hooks[0]?.id || null;
   state.selection = new Set([...state.selection].filter((id) => byId(id)));
   refreshAfterEdit(true);
   updateHistoryButtons();
@@ -241,13 +246,15 @@ async function loadFile(file, { handle = null, project = null } = {}) {
   Object.assign(state, {
     file, fileKey: key, fileHandle: handle || saved?.handle || null, thumb: saved?.thumb || null,
     url: URL.createObjectURL(file), info: null,
-    audio: null, peaks: null, transcript: [], captions: [], busy: null,
+    audio: null, peaks: null, transcript: [], captions: [], hooks: [], hookId: null, busy: null,
     selection: new Set(), anchorId: null, activeId: null, undo: [], redo: [], search: '', tab: 'captions',
   });
   loadPrefs();
   if (saved?.transcript?.length) {
     state.transcript = saved.transcript;
     state.captions = saved.captions || C.segment(saved.transcript, state.seg);
+    state.hooks = saved.hooks || [];
+    state.hookId = state.hooks[0]?.id || null;
     state.style = { ...C.DEFAULT_STYLE, ...saved.style };
     state.seg = { ...C.DEFAULT_SEGMENTATION, ...saved.seg };
     state.language = saved.language ?? state.language;
@@ -441,6 +448,7 @@ async function runTranscription() {
     if (hasCaptions()) pushUndo();
     state.transcript = words;
     state.captions = C.segment(words, state.seg);
+    state.hooks = []; state.hookId = null;
     state.busy = null;
     state.tab = 'captions';
     saveNow();
@@ -514,7 +522,7 @@ function renderPanel() {
     return;
   }
   const tabs = segmented(
-    [['captions', 'Legendas'], ['style', 'Estilo']], state.tab,
+    [['captions', 'Legendas'], ['style', 'Estilo'], ['hooks', 'Hooks']], state.tab,
     (v) => { state.tab = v; renderPanel(); drawPreview(); },
   );
   const head = h('div', { class: 'panel-head' }, tabs);
@@ -525,6 +533,16 @@ function renderPanel() {
     bindList(list);
     panel.replaceChildren(head, h('div', { class: 'panel-body', id: 'listScroller' }, list));
     renderList();
+  } else if (state.tab === 'hooks') {
+    if (state.hooks.length) {
+      head.append(h('div', { class: 'segmented' },
+        ...state.hooks.map((hk, i) => h('button', {
+          type: 'button', 'aria-pressed': String(hk.id === state.hookId),
+          onclick: () => selectHook(hk.id),
+        }, `Hook ${i + 1}`)),
+        h('button', { type: 'button', 'aria-pressed': 'false', title: 'Criar um hook com as legendas selecionadas', onclick: createHook }, '+ Novo')));
+    }
+    panel.replaceChildren(head, h('div', { class: 'panel-body' }, renderHooksBody()));
   } else {
     head.append(segmented(
       [['all', 'Todas as legendas'], ['selected', `Selecionadas (${state.selection.size})`]], state.styleScope,
@@ -1070,6 +1088,164 @@ function renderStyleBody() {
   );
 }
 
+// ---------------------------------------------------------------- aba Hooks
+
+let hookWord = null;   // palavra do hook sendo ajustada
+
+/** Lista de fontes igual à da aba Estilo, guardando só o nome da família. */
+function fontPicker(valor, ao, { comPadrao = false, rotulo = 'Fonte' } = {}) {
+  const enviadas = [...new Set(state.fonts.map((f) => f.family))];
+  const nomes = [...new Set([...FONTS, 'Didot', ...enviadas, valor].filter(Boolean))];
+  return h('select', { class: 'pick', 'aria-label': rotulo,
+    onchange: (e) => {
+      if (e.target.value === '__upload') { pickFontFile(); return; }
+      ao(e.target.value === '__padrao' ? null : e.target.value);
+    } },
+    comPadrao ? h('option', { value: '__padrao', selected: !valor }, 'Do layout') : null,
+    nomes.map((f) => h('option', { value: f, selected: f === valor }, f)),
+    h('option', { value: '__upload' }, 'Enviar fonte do computador (.ttf/.otf)…'));
+}
+
+function corPicker(valor, ao) {
+  return h('div', { class: 'swatches' },
+    HOOK_COLORS.map((hex) => h('button', { type: 'button', class: 'swatch', style: `background:${hex}`,
+      'aria-label': hex, 'aria-pressed': String((valor || '').toUpperCase() === hex),
+      onclick: () => ao(hex) })),
+    h('label', { class: 'swatch roda', title: 'Qualquer cor' },
+      h('input', { type: 'color', value: (valor || '#E8441F'), 'aria-label': 'Qualquer cor',
+        oninput: (e) => ao(e.target.value.toUpperCase()) })));
+}
+
+function renderHooksBody() {
+  const hk = currentHook();
+  if (!hk) {
+    const quantas = state.captions.filter((c) => state.selection.has(c.id) && semHook(c)).length;
+    return h('div', { class: 'hooks-body' },
+      h('p', { class: 'scope-hint' }, 'Um hook junta legendas seguidas numa frase de destaque, com animação. Selecione as legendas na aba Legendas (⌘-clique para várias, ⇧-clique para um intervalo) e volte aqui.'),
+      h('button', { class: 'btn primary lg block', type: 'button', disabled: !quantas, onclick: createHook },
+        quantas ? `Transformar ${quantas} ${quantas === 1 ? 'legenda' : 'legendas'} em hook` : 'Transformar em hook'));
+  }
+
+  const palavras = wordsOf(hk);
+  if (hookWord != null && hookWord >= palavras.length) hookWord = null;
+  const ajuste = hookWord != null ? (hk.tweaks[hookWord] = hk.tweaks[hookWord] || {}) : null;
+  const rerender = () => { renderPanel(); drawPreview(); };
+
+  const linha = (rot, ...kids) => h('div', { class: 'linha' }, h('span', null, rot), ...kids);
+  const chip = (texto, on, ao) => h('button', { class: `chip-mini${on ? ' on' : ''}`, type: 'button', onclick: () => { ao(); rerender(); } }, texto);
+  const faixa = (rot, valor, min, max, passo, ao, fmt = (v) => v) => {
+    const out = h('span', { class: 'val' }, String(fmt(valor)));
+    return linha(rot, h('input', { type: 'range', min, max, step: passo, value: String(valor), 'aria-label': rot,
+      oninput: (e) => { const v = +e.target.value; out.textContent = String(fmt(v)); ao(v); } }), out);
+  };
+  const pct = (v) => `${Math.round(v * 100)}%`;
+
+  const frase = h('textarea', { class: 'hook-frase', spellcheck: 'true', 'aria-label': 'Frase do hook',
+    oninput: (e) => { hk.text = e.target.value; drawPreview(); renderTimeline(); scheduleSave(); } });
+  frase.value = hk.text;
+
+  const chips = h('div', { class: 'hook-palavras' }, palavras.map((p, i) => h('button', {
+    type: 'button',
+    class: `${hk.marks.includes(i) ? 'marcada' : ''}${hookWord === i ? ' sel' : ''}`,
+    title: 'Clique para ajustar só esta palavra',
+    onclick: () => { hookWord = hookWord === i ? null : i; rerender(); },
+  }, p)));
+
+  const editorPalavra = ajuste ? h('div', { class: 'hook-editor' },
+    linha(`“${palavras[hookWord]}”`,
+      chip(hk.marks.includes(hookWord) ? 'em destaque' : 'sem destaque', hk.marks.includes(hookWord), () => {
+        hk.marks = hk.marks.includes(hookWord) ? hk.marks.filter((x) => x !== hookWord) : [...hk.marks, hookWord];
+        scheduleSave();
+      })),
+    linha('Fonte', fontPicker(ajuste.fam, (v) => { ajuste.fam = v; rerender(); scheduleSave(); }, { comPadrao: true })),
+    linha('Estilo',
+      chip('itálico', !!ajuste.ital, () => { ajuste.ital = !ajuste.ital; scheduleSave(); }),
+      chip('negrito', ajuste.peso === 800, () => { ajuste.peso = ajuste.peso === 800 ? null : 800; scheduleSave(); }),
+      chip('grifo', !!ajuste.grifo, () => { ajuste.grifo = !ajuste.grifo; scheduleSave(); })),
+    linha('Cor', corPicker(ajuste.cor, (v) => { ajuste.cor = ajuste.cor === v ? null : v; rerender(); scheduleSave(); })),
+    faixa('Tamanho', ajuste.escala ?? 1, 0.4, 2.5, 0.05, (v) => { ajuste.escala = v; drawPreview(); scheduleSave(); }, (v) => v.toFixed(2)),
+    faixa('Move ↔', ajuste.dx || 0, -30, 30, 1, (v) => { ajuste.dx = v; drawPreview(); scheduleSave(); }),
+    faixa('Move ↕', ajuste.dy || 0, -30, 30, 1, (v) => { ajuste.dy = v; drawPreview(); scheduleSave(); }),
+    h('button', { class: 'chip-mini', type: 'button', onclick: () => { hk.tweaks[hookWord] = {}; hk.marks = hk.marks.filter((x) => x !== hookWord); rerender(); scheduleSave(); } }, 'Limpar esta palavra'),
+  ) : null;
+
+  return h('div', { class: 'hooks-body' },
+    frase,
+    chips,
+    editorPalavra,
+    h('div', { class: 'hook-editor' },
+      linha('Layout', h('select', { class: 'pick', 'aria-label': 'Layout',
+        onchange: (e) => { patchHook({ layout: e.target.value }); rerender(); } },
+        HOOK_LAYOUTS.map(([v, n]) => h('option', { value: v, selected: v === hk.layout }, n)))),
+      linha('Animação', h('select', { class: 'pick', 'aria-label': 'Animação',
+        onchange: (e) => { patchHook({ anim: e.target.value }); rerender(); } },
+        HOOK_ANIMS.map(([v, n]) => h('option', { value: v, selected: v === hk.anim }, n)))),
+      faixa('Velocidade', hk.speed, 0.4, 2.5, 0.1, (v) => patchHook({ speed: v }, 'speed'), (v) => `${v.toFixed(1)}×`),
+      linha('Cor', corPicker(hk.color, (v) => { patchHook({ color: v }); rerender(); }))),
+    h('div', { class: 'hook-editor' },
+      linha('Principal', fontPicker(hk.fontA, (v) => { patchHook({ fontA: v || 'Helvetica Neue' }); rerender(); })),
+      linha('Contraste', fontPicker(hk.fontB, (v) => { patchHook({ fontB: v || 'Didot' }); rerender(); }))),
+    h('div', { class: 'hook-editor' },
+      faixa('Bojo', hk.bulge, 0, 2, 0.05, (v) => patchHook({ bulge: v }, 'bulge'), pct),
+      faixa('Tamanho', hk.lens, 0.12, 0.9, 0.02, (v) => patchHook({ lens: v }, 'lens'), pct),
+      h('p', { class: 'note' }, 'O bojo entorta as letras como uma lente. O tamanho diz até onde ela alcança.')),
+    h('p', { class: 'note' }, `Vai de ${C.formatClock(hk.start, true)} a ${C.formatClock(hk.end, true)}. Arraste as bordas do bloco preto na linha do tempo para mudar.`),
+    h('button', { class: 'btn soft block', type: 'button', onclick: () => deleteHook(hk.id) }, 'Desfazer este hook'),
+  );
+}
+
+// ---------------------------------------------------------------- hooks
+
+const currentHook = () => state.hooks.find((h) => h.id === state.hookId) || null;
+const semHook = (c) => !state.hooks.some((hk) => c.start < hk.end - 0.01 && c.end > hk.start + 0.01);
+
+/** Transforma as legendas selecionadas numa frase de destaque. */
+function createHook() {
+  const sel = state.captions.filter((c) => state.selection.has(c.id) && semHook(c));
+  if (!sel.length) { toast('Selecione na lista as legendas que viram o hook.'); return; }
+  pushUndo();
+  const id = C.newId();
+  const hook = {
+    ...DEFAULT_HOOK, id, marks: [], tweaks: {},
+    text: sel.map((c) => c.text.replace(/\n/g, ' ')).join(' ').replace(/\s+/g, ' ').trim(),
+    start: sel[0].start, end: sel[sel.length - 1].end,
+    fontA: state.style.font,
+  };
+  state.hooks = [...state.hooks, hook].sort((a, b) => a.start - b.start);
+  state.hookId = id;
+  state.tab = 'hooks';
+  state.selection.clear();
+  refreshAfterEdit(true);
+  seek(hook.start + (hook.end - hook.start) * 0.6);
+  toast(`Hook criado com ${sel.length} ${sel.length === 1 ? 'legenda' : 'legendas'}. Elas ficam escondidas enquanto ele existir.`);
+}
+
+function deleteHook(id) {
+  pushUndo();
+  state.hooks = state.hooks.filter((h) => h.id !== id);
+  if (state.hookId === id) state.hookId = state.hooks[0]?.id || null;
+  refreshAfterEdit(true);
+  toast('Hook desfeito. As legendas voltaram como estavam.');
+}
+
+function selectHook(id) {
+  state.hookId = id;
+  const h = currentHook();
+  if (h) seek(h.start + (h.end - h.start) * 0.6);
+  renderPanel();
+  updateRowStates();
+  drawPreview();
+}
+
+function patchHook(patch, tag) {
+  const h = currentHook();
+  if (!h) return;
+  pushUndo(tag ? `hook:${tag}` : null);
+  Object.assign(h, patch);
+  drawPreview();
+  scheduleSave();
+}
+
 // ---------------------------------------------------------------- fontes enviadas
 
 function pickFontFile() {
@@ -1171,6 +1347,8 @@ function tick() {
     state.activeId = id;
     updateRowStates();
     drawPreview();
+  } else if (hookAt(state.hooks, t)) {
+    drawPreview();   // hook é animação: repinta quadro a quadro
   }
   if (!video.paused) {
     const x = t * state.zoom;
@@ -1289,17 +1467,23 @@ function drawPreview() {
   ctx.clearRect(0, 0, W, H);
   if (state.safeArea) drawSafeArea(ctx, W, H);
   if (hasCaptions()) {
-    const i = C.captionAt(state.captions, video.currentTime || 0);
-    let c = i >= 0 ? state.captions[i] : null;
-    let ghost = false;
-    if (!c && state.tab === 'style') {
-      c = state.captions.find((x) => state.selection.has(x.id)) || state.captions[0];
-      ghost = true;
-    }
-    if (c) {
-      ctx.globalAlpha = ghost ? 0.6 : 1;
-      drawCaption(ctx, W, H, c.text, C.effectiveStyle(c, state.style));
-      ctx.globalAlpha = 1;
+    const agora = video.currentTime || 0;
+    const hk = hookAt(state.hooks, agora);
+    if (hk) {
+      drawHook(ctx, W, H, hk, agora - hk.start);
+    } else {
+      const i = C.captionAt(state.captions, agora);
+      let c = i >= 0 && semHook(state.captions[i]) ? state.captions[i] : null;
+      let ghost = false;
+      if (!c && state.tab === 'style') {
+        c = state.captions.find((x) => state.selection.has(x.id)) || state.captions.find(semHook);
+        ghost = true;
+      }
+      if (c) {
+        ctx.globalAlpha = ghost ? 0.6 : 1;
+        drawCaption(ctx, W, H, c.text, C.effectiveStyle(c, state.style));
+        ctx.globalAlpha = 1;
+      }
     }
   }
   if (dragGuides && (dragGuides.x || dragGuides.y)) drawCenterGuides(ctx, W, H, dragGuides);
@@ -1375,11 +1559,18 @@ function renderTimeline() {
   const dur = duration();
   const width = Math.max(timeline.clientWidth, Math.ceil(dur * state.zoom) + 40);
   tlInner.style.width = `${width}px`;
+  app.classList.toggle('tem-hooks', state.hooks.length > 0);
+  tlHooks.replaceChildren(...state.hooks.map((hk) => h('div', {
+    class: `tl-hook${hk.id === state.hookId ? ' on' : ''}`, dataset: { hook: hk.id },
+    style: `left:${hk.start * state.zoom}px; width:${Math.max(14, (hk.end - hk.start) * state.zoom)}px`,
+    title: hk.text,
+  }, h('span', null, hk.text), h('span', { class: 'edge l' }), h('span', { class: 'edge r' }))));
+
   tlBlocks.replaceChildren(...state.captions.map((c) => {
     const w = Math.max(3, (c.end - c.start) * state.zoom);
     const first = c.text.split('\n')[0];
     return h('div', {
-      class: 'tl-block', dataset: { id: c.id },
+      class: `tl-block${semHook(c) ? '' : ' coberta'}`, dataset: { id: c.id },
       style: `left:${c.start * state.zoom}px; width:${w}px`,
       title: c.text,
     },
@@ -1405,8 +1596,9 @@ function layoutTimeline() {
   const hgt = timeline.clientHeight;
   if (!hgt) return null;
   const blockH = tlBlocks.offsetHeight || 48;
-  const waveH = clamp(hgt - TL_PAD * 2 - blockH - TL_GAP, 16, WAVE_MAX_H);
-  const pad = Math.max(TL_PAD, Math.round((hgt - (blockH + TL_GAP + waveH)) / 2));
+  const faixaHooks = state.hooks.length ? 38 : 0;
+  const waveH = clamp(hgt - TL_PAD * 2 - faixaHooks - blockH - TL_GAP, 16, WAVE_MAX_H);
+  const pad = Math.max(TL_PAD, Math.round((hgt - (faixaHooks + blockH + TL_GAP + waveH)) / 2));
   if (pad !== lastPad) {
     lastPad = pad;
     app.style.setProperty('--tl-pad', `${pad}px`);
@@ -1428,7 +1620,7 @@ function drawWave() {
   ctx.fillStyle = '#cfcfd6';
   const box = layoutTimeline();
   if (!box) return;
-  const mid = box.pad + box.blockH + TL_GAP + box.waveH / 2;
+  const mid = box.pad + (state.hooks.length ? 38 : 0) + box.blockH + TL_GAP + box.waveH / 2;
   const amp = box.waveH / 2;
   const scroll = timeline.scrollLeft;
   for (let x = 0; x < w; x += 2) {
@@ -1479,6 +1671,41 @@ function bindTimeline() {
 
   tlInner.addEventListener('pointerdown', (e) => {
     if (e.target.closest('.tl-add')) return;   // o + tem o clique dele
+
+    const hookEl = e.target.closest('.tl-hook');
+    if (hookEl) {
+      const hk = state.hooks.find((x) => x.id === hookEl.dataset.hook);
+      if (!hk) return;
+      const borda = e.target.classList.contains('edge') ? (e.target.classList.contains('l') ? 'start' : 'end') : null;
+      if (!borda) { selectHook(hk.id); state.tab = 'hooks'; renderPanel(); renderTimeline(); return; }
+      e.preventDefault();
+      hookEl.setPointerCapture(e.pointerId);
+      let mexeu = false;
+      const mover = (ev) => {
+        if (!mexeu) { mexeu = true; pushUndo(); }
+        const t = timeAt(ev.clientX);
+        if (borda === 'start') hk.start = clamp(t, 0, hk.end - 0.4);
+        else hk.end = clamp(t, hk.start + 0.4, duration() || hk.end + 10);
+        hookEl.style.left = `${hk.start * state.zoom}px`;
+        hookEl.style.width = `${Math.max(14, (hk.end - hk.start) * state.zoom)}px`;
+        seek(borda === 'start' ? hk.start + 0.001 : hk.end - 0.001);
+      };
+      const soltar = () => {
+        hookEl.removeEventListener('pointermove', mover);
+        hookEl.removeEventListener('pointerup', soltar);
+        hookEl.removeEventListener('pointercancel', soltar);
+        if (!mexeu) return;
+        state.hooks.sort((a, b) => a.start - b.start);
+        renderTimeline();
+        if (state.tab === 'hooks') renderPanel();
+        scheduleSave();
+      };
+      hookEl.addEventListener('pointermove', mover);
+      hookEl.addEventListener('pointerup', soltar);
+      hookEl.addEventListener('pointercancel', soltar);
+      return;
+    }
+
     const block = e.target.closest('.tl-block');
     if (!block) {
       const t = clamp(timeAt(e.clientX), 0, duration() || 0);
@@ -1664,7 +1891,7 @@ function bindExport() {
 }
 
 function exportSRT() {
-  download(new Blob([C.toSRT(state.captions, state.style)], { type: 'text/plain;charset=utf-8' }), `${baseName()}.srt`);
+  download(new Blob([C.toSRT(state.captions, state.style, state.hooks)], { type: 'text/plain;charset=utf-8' }), `${baseName()}.srt`);
   toast('Legenda SRT salva em Downloads.');
 }
 
@@ -1683,6 +1910,9 @@ function openFcpxmlDialog() {
       h('li', null, 'Abra esse projeto, clique na timeline e selecione todos os titles (⌘A). Copie (⌘C).'),
       h('li', null, 'No seu projeto, coloque o playhead no início do vídeo e use Editar › Colar como Clipe Conectado (⌥V).')),
     h('p', { class: 'note' }, 'A caixa de fundo não existe no Basic Title e não vai para o Final Cut. Fontes que não estiverem instaladas no Mac são trocadas por uma padrão.'),
+    state.hooks.length
+      ? h('p', { class: 'note' }, `Os ${state.hooks.length === 1 ? 'seu hook vai' : `seus ${state.hooks.length} hooks vão`} como texto parado: o Basic Title não faz a animação nem a deformação. No MP4 eles saem completos.`)
+      : null,
     customUsed.length
       ? h('p', { class: 'note' }, `Atenção: ${customUsed.join(', ')} ${customUsed.length === 1 ? 'foi enviada' : 'foram enviadas'} por você aqui no app. Para o Final Cut mostrar igual, instale ${customUsed.length === 1 ? 'essa fonte' : 'essas fontes'} no Mac pelo Livro de Fontes.`)
       : null,
@@ -1691,7 +1921,7 @@ function openFcpxmlDialog() {
       h('button', { class: 'btn primary', type: 'button', onclick: () => {
         const fpsOption = C.FPS_OPTIONS.find((o) => o.label === fpsSelect.value) || detected;
         const xml = C.toFCPXML({
-          caps: state.captions, style: state.style, fpsOption,
+          caps: state.captions, style: state.style, hooks: state.hooks, fpsOption,
           width: info.width, height: info.height, duration: duration(),
           projectName: `${baseName()} – Legendas`,
         });
@@ -1733,7 +1963,7 @@ async function exportMp4() {
   const started = performance.now();
   try {
     const blob = await exportBurnedIn(state.file, {
-      captions: state.captions, style: state.style, writable, signal: ctrl.signal,
+      captions: state.captions, style: state.style, hooks: state.hooks, writable, signal: ctrl.signal,
       width: state.info?.width || video.videoWidth, height: state.info?.height || video.videoHeight,
       onProgress: (p) => {
         bar.style.width = `${Math.round(p * 100)}%`;

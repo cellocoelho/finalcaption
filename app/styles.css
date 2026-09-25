@@ -212,6 +212,18 @@ button { cursor: pointer; }
 .tl-wave { position: sticky; left: 0; display: block; height: 100%; pointer-events: none; }
 /* altura fixa; o `top` vem do JS para o conjunto ficar centrado com folga em cima e embaixo */
 .tl-blocks { position: absolute; left: 0; right: 0; top: var(--tl-pad, 12px); height: 48px; }
+/* camada dos hooks, por cima das legendas */
+.tl-hooks { position: absolute; left: 0; right: 0; top: var(--tl-pad, 12px); height: 30px; }
+#app.tem-hooks .tl-blocks { top: calc(var(--tl-pad, 12px) + 38px); }
+.tl-hook {
+  position: absolute; top: 0; height: 100%;
+  display: flex; align-items: center; gap: 6px;
+  border-radius: 10px; background: var(--ink); color: #fff;
+  padding: 0 10px; font-size: 11.5px; white-space: nowrap; overflow: hidden;
+  cursor: pointer; user-select: none;
+}
+.tl-hook::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--signal); flex: none; }
+.tl-hook.on { box-shadow: 0 0 0 2px var(--signal); }
 .tl-block {
   position: absolute; top: 0; height: 100%;
   cursor: grab; touch-action: none;
@@ -236,9 +248,11 @@ button { cursor: pointer; }
 .tl-label.empty { opacity: .45; font-style: italic; }
 .tl-block.selected { background: var(--ink); color: #fff; box-shadow: none; }
 .tl-block.active { box-shadow: 0 0 0 2px var(--signal); }
-.tl-block .edge { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; }
-.tl-block .edge.l { left: 0; }
-.tl-block .edge.r { right: 0; }
+.tl-block .edge, .tl-hook .edge { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; }
+.tl-block .edge.l, .tl-hook .edge.l { left: 0; }
+.tl-block .edge.r, .tl-hook .edge.r { right: 0; }
+.tl-block.coberta { opacity: .32; }
+.tl-hook > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .tl-playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ink); pointer-events: none; }
 .tl-playhead::before { content: ""; position: absolute; top: 0; left: -4px; width: 10px; height: 10px; border-radius: 0 0 5px 5px; background: var(--ink); }
 .tl-skimmer { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--signal); pointer-events: none; z-index: 2; }
@@ -380,6 +394,34 @@ button { cursor: pointer; }
 .live-text { min-height: 3.2em; color: var(--slate); font-size: 13px; }
 .note { color: var(--slate); font-size: 12.5px; }
 .error { color: var(--danger); }
+
+/* ---------- Hooks ---------- */
+.hooks-body { padding: 4px 16px 24px; display: grid; gap: 10px; align-content: start; }
+.hook-frase {
+  width: 100%; min-height: 76px; border: 0; border-radius: 20px; background: var(--mist);
+  padding: 14px 18px; font: inherit; font-size: 15px; line-height: 1.4; resize: vertical; outline: none;
+}
+.hook-frase:focus { box-shadow: 0 0 0 2px var(--focus); }
+.hook-palavras { display: flex; flex-wrap: wrap; gap: 6px; }
+.hook-palavras button {
+  border: 0; border-radius: 999px; background: var(--mist); color: var(--slate);
+  font-size: 13px; padding: 7px 12px;
+}
+.hook-palavras button.marcada { background: var(--signal); color: var(--signal-ink); font-weight: 600; }
+.hook-palavras button.sel { box-shadow: 0 0 0 2px var(--ink); }
+.hook-editor { border-radius: 20px; background: var(--mist); padding: 14px 16px; display: grid; gap: 10px; }
+.hook-editor .linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hook-editor .linha > span:first-child { font-size: 13px; color: var(--slate); min-width: 78px; }
+.hook-editor select { min-height: 40px; background-color: #fff; flex: 1; min-width: 140px; border-radius: 14px; padding: 0 34px 0 14px; }
+.hook-editor input[type="range"] { flex: 1; accent-color: var(--ink); }
+.hook-editor .val { font-size: 13px; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+.chip-mini {
+  border: 0; border-radius: 999px; background: #fff; color: var(--slate);
+  font-size: 12.5px; font-weight: 500; padding: 7px 13px;
+}
+.chip-mini.on { background: var(--ink); color: #fff; }
+.swatch.roda { position: relative; overflow: hidden; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); }
+.swatch.roda input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
 /* ---------- Estilo ---------- */
 .style-body { padding: 4px 16px 24px; display: grid; gap: 10px; align-content: start; }

@@ -88,6 +88,30 @@ Estilo
     é o limite do Reels; a linha fininha mais abaixo é até onde dá para descer num
     Stories. É só um guia — não aparece no vídeo exportado.
 
+Hooks (aba "Hooks")
+  - Um hook é aquela frase de impacto animada que aparece no começo dos Reels.
+  - Na aba Legendas, selecione as legendas seguidas que formam a frase (⌘-clique
+    para várias, ⇧-clique para um intervalo). Vá na aba Hooks e clique em
+    "Transformar em hook".
+  - Ele vira uma sub-aba própria ("Hook 1", "Hook 2"…) e aparece na linha do tempo
+    como uma tarja preta numa faixa acima das legendas. As legendas daquele trecho
+    ficam apagadas — o hook toma o lugar delas.
+  - Dentro da sub-aba você escolhe:
+      Layout ....... como a frase se arruma (Manchete, Mistura, Serifa solta,
+                     Grifo, Elegante, Condensada, Bojo)
+      Animação ..... como ela entra (Pop, Subir, Destaque, Uma por vez, Zoom, Máquina)
+      Velocidade ... mais rápida ou mais lenta
+      Cor .......... inclusive qualquer cor na rodinha
+      Fontes ....... a principal e a de contraste (a das serifas e itálicos)
+      Bojo ......... a deformação de lente, com força e tamanho
+  - Clique numa palavra da frase para mexer só nela: fonte, itálico, negrito, grifo,
+    cor, tamanho e posição.
+  - Arraste as bordas da tarja preta na linha do tempo para mudar quando ele começa
+    e termina.
+  - "Desfazer este hook" apaga a sub-aba e as legendas voltam como estavam. ⌘Z também.
+  - No MP4 o hook sai completo, com animação e deformação. No Final Cut ele vai como
+    texto parado: o title do Final Cut não faz esse tipo de animação.
+
 Atalhos: Espaço (play/pausa), N (nova legenda), S (prévia seguindo o mouse),
 ⌘Z (desfazer), ⇧⌘Z (refazer),
 setas ← → (legenda anterior/próxima), Delete (excluir as selecionadas).

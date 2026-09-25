@@ -320,9 +320,17 @@ function srtTime(t) {
 
 // ---------- SRT ----------
 
-export function toSRT(caps, globalStyle) {
-  return caps
-    .map((c) => ({ c, text: renderText(c.text, effectiveStyle(c, globalStyle)).trim() }))
+/** Une legendas e hooks numa lista só, em ordem: os hooks substituem o trecho deles. */
+export function timeline(caps, hooks = []) {
+  const cobre = (c) => hooks.some((h) => c.start < h.end - 0.01 && c.end > h.start + 0.01);
+  const itens = caps.filter((c) => !cobre(c)).map((c) => ({ ...c, hook: null }))
+    .concat(hooks.map((h) => ({ id: h.id, text: h.text, start: h.start, end: h.end, style: null, hook: h })));
+  return itens.sort((a, b) => a.start - b.start);
+}
+
+export function toSRT(caps, globalStyle, hooks = []) {
+  return timeline(caps, hooks)
+    .map((c) => ({ c, text: renderText(c.text, c.hook ? { textCase: 'original', stripPunct: false } : effectiveStyle(c, globalStyle)).trim() }))
     .filter((x) => x.text)
     .map((x, i) => `${i + 1}\n${srtTime(x.c.start)} --> ${srtTime(x.c.end)}\n${x.text}\n`)
     .join('\n');
@@ -377,7 +385,7 @@ const num = (v) => String(+v.toFixed(2));
  * No Final Cut: importe, selecione os titles, copie e cole no seu projeto com o
  * playhead no início do vídeo.
  */
-export function toFCPXML({ caps, style, fpsOption, width, height, duration, projectName }) {
+export function toFCPXML({ caps, style, hooks = [], fpsOption, width, height, duration, projectName }) {
   const { num: fn, den: fd } = fpsOption;
   const frames = (sec) => Math.max(0, Math.round((sec * fd) / fn));
   const t = (f) => (f === 0 ? '0s' : `${f * fn}/${fd}s`);
@@ -388,8 +396,11 @@ export function toFCPXML({ caps, style, fpsOption, width, height, duration, proj
   const titles = [];
   let prevEnd = 0;
   let tsIndex = 0;
-  for (const c of caps) {
-    const st = effectiveStyle(c, style);
+  for (const c of timeline(caps, hooks)) {
+    // o hook vira um title parado: o Basic Title não anima palavra a palavra
+    const st = c.hook
+      ? { ...style, color: c.hook.color, font: c.hook.fontA, size: style.size * 1.25, textCase: 'original', stripPunct: false, posX: 50, posY: 50 }
+      : effectiveStyle(c, style);
     const text = renderText(c.text, st).trim();
     if (!text) continue;
     let s = Math.max(frames(c.start), prevEnd);
