@@ -290,39 +290,40 @@ button { cursor: pointer; }
 /* bloco-slider: a barra inteira é o controle */
 .bar {
   position: relative; display: flex; align-items: center;
-  height: 64px; padding: 0 20px; border-radius: 20px;
+  height: 40px; padding: 0 16px; border-radius: 12px;
   background: var(--mist); overflow: hidden; cursor: ew-resize;
 }
-.bar-fill { position: absolute; top: 0; bottom: 0; background: var(--mist-2); pointer-events: none; }
-/* a marca fica partida em dois para nunca cruzar o rótulo */
-.bar-mark { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; pointer-events: none; }
-.bar-mark::before, .bar-mark::after {
-  content: ""; position: absolute; left: 0; width: 2px; border-radius: 1px; background: var(--ink);
+.bar-fill { position: absolute; top: 0; bottom: 0; background: #e4e4e9; pointer-events: none; }
+/* o risquinho curto na ponta do preenchimento; some quando passaria sobre o texto */
+.bar-mark {
+  position: absolute; top: 50%; width: 2px; height: 14px; margin: -7px 0 0 -1px;
+  border-radius: 1px; background: #8e8e93; pointer-events: none; transition: opacity .12s;
 }
-.bar-mark::before { top: 11px; height: 12px; }
-.bar-mark::after { bottom: 11px; height: 12px; }
-.bar-name { position: relative; font-size: 14.5px; color: var(--slate); pointer-events: none; }
-.bar-value { position: relative; margin-left: auto; font-size: 14.5px; font-weight: 500; font-variant-numeric: tabular-nums; pointer-events: none; }
+.bar-mark.sob { opacity: 0; }
+.bar-name { position: relative; font-size: 14px; color: var(--slate); pointer-events: none; }
+.bar-value { position: relative; margin-left: auto; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; pointer-events: none; }
 .bar input[type="range"] {
   position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
   opacity: 0; cursor: ew-resize; appearance: none; background: transparent;
 }
 .bar:focus-within { box-shadow: 0 0 0 2px var(--focus); }
 
-/* bloco com interruptor ou valor */
+/* bloco com interruptor ou valor: mesma altura e cantos dos sliders */
 .opt {
   display: flex; align-items: center; gap: 12px;
-  min-height: 64px; padding: 12px 20px; border-radius: 20px; background: var(--mist);
+  min-height: 40px; padding: 6px 16px; border-radius: 12px; background: var(--mist);
 }
-.opt > span:first-child { font-size: 14.5px; }
+.opt > span:first-child { font-size: 14px; white-space: nowrap; }
+.opt .swatches { gap: 7px; }
+.opt .swatch { width: 24px; height: 24px; }
 .opt .switch { margin-left: auto; }
 .opt-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.opt-2 .opt { padding: 12px 16px; }
+.opt-2 .opt { padding: 6px 14px; }
 
 .pick {
-  appearance: none; width: 100%; min-height: 64px; border: 0; border-radius: 20px;
-  background: var(--mist) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%236e6e73' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 18px center / 12px;
-  padding: 0 40px 0 20px; font-size: 14.5px; text-align: left;
+  appearance: none; width: 100%; min-height: 40px; border: 0; border-radius: 12px;
+  background: var(--mist) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%236e6e73' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 16px center / 12px;
+  padding: 0 38px 0 16px; font-size: 14px; text-align: left;
 }
 
 .search {
@@ -411,10 +412,33 @@ button { cursor: pointer; }
 .hook-palavras button.sel { box-shadow: 0 0 0 2px var(--ink); }
 .hook-editor { border-radius: 20px; background: var(--mist); padding: 14px 16px; display: grid; gap: 10px; }
 .hook-editor .linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.hook-editor .linha > span:first-child { font-size: 13px; color: var(--slate); min-width: 78px; }
-.hook-editor select { min-height: 40px; background-color: #fff; flex: 1; min-width: 140px; border-radius: 14px; padding: 0 34px 0 14px; }
-.hook-editor input[type="range"] { flex: 1; accent-color: var(--ink); }
-.hook-editor .val { font-size: 13px; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+.hook-editor .linha > span:first-child { font-size: 13px; color: var(--slate); min-width: 72px; }
+.hook-editor label.linha { cursor: pointer; }
+.hook-editor .linha .switch { margin-left: auto; }
+.hook-box-toggle { margin-left: auto; display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; color: var(--slate); }
+.hook-editor .hook-box-toggle .switch { margin-left: 0; }
+.hook-editor .swatches { gap: 7px; }
+.hook-editor select { min-height: 34px; background-color: #fff; flex: 1; min-width: 140px; border-radius: 11px; padding: 0 34px 0 14px; }
+/* barras ainda mais finas dentro dos cartões dos hooks */
+.hook-editor .bar { height: 34px; padding: 0 14px; border-radius: 11px; background: #fff; }
+.hook-editor .bar-fill { background: var(--mist-2); }
+.hook-editor .bar-name, .hook-editor .bar-value { font-size: 13px; }
+.hook-editor .bar-mark { height: 12px; margin-top: -6px; }
+.hook-titulo { font-size: 13px; color: var(--slate); }
+.hook-layouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.hook-layout {
+  display: grid; gap: 5px; padding: 0; border: 0; background: none;
+  font-size: 11.5px; color: var(--slate); text-align: center;
+}
+.hook-layout canvas {
+  width: 100%; aspect-ratio: 4 / 5; border-radius: 14px; display: block;
+  transition: box-shadow .15s var(--ease);
+}
+.hook-layout:hover canvas { box-shadow: 0 0 0 2px var(--mist), 0 0 0 4px var(--faint); }
+.hook-layout[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
+.hook-layout[aria-pressed="true"] canvas { box-shadow: 0 0 0 2px var(--mist), 0 0 0 4px var(--ink); }
+.hook-anim { display: grid; gap: 10px; padding-top: 4px; }
+.hook-anims { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip-mini {
   border: 0; border-radius: 999px; background: #fff; color: var(--slate);
   font-size: 12.5px; font-weight: 500; padding: 7px 13px;

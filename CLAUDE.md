@@ -214,6 +214,21 @@ Um hook é uma frase de destaque, animada, que substitui as legendas de um trech
   - o texto é desenhado num canvas `SS` vezes maior e amostrado dali, senão borra ao ampliar;
   - custo medido: ~7 ms/quadro na prévia, ~52 ms em 1080×1920. Só a área com texto é processada.
 - `tick()` repinta a prévia a cada quadro enquanto o playhead está dentro de um hook.
+- Painel: o layout se escolhe por **miniaturas** (`pintaThumbs`: fundo preto e a frase fixa "The quick brown
+  fox jumps" com "brown" em destaque; usam as cores, fontes e contorno do hook, sem o bojo;
+  animação forçada em `pop` no fim para mostrar tudo parado). Animação e velocidade só aparecem
+  depois de clicar numa miniatura (`hookAnimAberta`). As barras são `barSlider`, versão fina
+  (40 px, CSS em `.hook-editor .bar`).
+- Cor das letras e cor do box são separadas: `hook.color` é o destaque/box, `hook.boxInk` o texto
+  dentro do box (padrão `#141414`); por palavra, `cor` = letras e `fundo` = box. `hookRuns(hook)`
+  diz ao painel quais palavras têm box.
+- Não existe mais o botão "em destaque" por palavra: mexer em `hook.marks` muda o padrão do layout
+  e **outras palavras mudavam junto** (o Cello reclamou). No lugar, um interruptor "Box" só naquela
+  palavra (`tweaks[i].grifo`), visível nos `LAYOUTS_COM_BOX` (Grifo, Elegante) ou se a palavra já
+  tiver box. `marks` continua valendo nos projetos antigos e nas miniaturas.
+- Contorno opcional: `hook.stroke` (liga/desliga) e `hook.strokeW` (espessura). Hooks antigos sem a
+  chave continuam com contorno.
+- `renderPanel` mantém a rolagem quando remonta a mesma aba (Estilo e Hooks).
 - Nas exportações, `timeline(caps, hooks)` (em `core.js`) junta tudo em ordem, com os hooks no
   lugar das legendas cobertas. No **FCPXML o hook vira um title parado** — o Basic Title não anima
   palavra a palavra nem deforma; a janela de exportação avisa.
@@ -237,17 +252,20 @@ O painel da direita segue uma linguagem própria, tirada das referências do Cel
 (Iconly, barras do Instagram, widgets de "active settings"):
 
 - **sem borda, sem linha divisória, sem sombra** — o que separa é o preenchimento cinza e o espaço;
-- cantos bem arredondados: 20 px nos blocos, 24 px no cartão, pílula nas abas, busca e botões;
-- cada controle é um bloco de 64 px de altura, não uma linha espremida;
-- os sliders são a barra inteira (`.bar`): um `input[type=range]` invisível por cima, `.bar-fill`
-  desenha o preenchimento (com `min-width` para o traço não cair em cima do rótulo), nome à
-  esquerda e valor à direita. Use `barSlider()`. **Quando a mudança remonta o painel** (os
-  parâmetros de divisão, que chamam `regroup`), passe `{ live: false }`: senão o próprio input é
-  destruído no primeiro evento do arraste e o slider fica travado. O preenchimento é sempre real
-  (nada de piso): ele sai da origem até o valor, e a origem é o começo nos controles normais,
-  o zero quando `min < 0`, ou o que vier em `{ origin }` (o centro em "Lado", o 1,18 em "Entre
-  linhas"). No valor de origem não há preenchimento nenhum, só a marca. A marca (`.bar-mark`) é
-  partida em dois pedaços, topo e base, para nunca cruzar o rótulo;
+- cantos: 12 px nos blocos de controle (sliders, listas, interruptores), 20 px nos cartões dos
+  hooks, pílula nas abas, busca e botões;
+- cada controle é um bloco de 40 px de altura (34 px dentro dos cartões dos hooks), seguindo a
+  referência do Cello — sliders, listas e interruptores com a mesma altura;
+- os sliders são a barra inteira (`.bar`, 40 px; 34 px dentro dos cartões dos hooks): um
+  `input[type=range]` invisível por cima, `.bar-fill` desenha o preenchimento, nome à esquerda e
+  valor à direita. Use `barSlider()`. **Quando a mudança remonta o painel** (os parâmetros de
+  divisão, que chamam `regroup`), passe `{ live: false }`: senão o próprio input é destruído no
+  primeiro evento do arraste e o slider fica travado. O preenchimento é sempre real (nada de
+  piso): ele sai da origem até o valor, e a origem é o começo nos controles normais, o zero quando
+  `min < 0`, ou o que vier em `{ origin }` (o centro em "Lado", o 1,18 em "Entre linhas"). A marca
+  (`.bar-mark`) é um risquinho curto, centrado na altura, 8 px para dentro da ponta do
+  preenchimento (referência do Cello); ela some (`.sob`) quando passaria por cima do nome ou do
+  valor — por isso `paint` mede em px e repinta num `requestAnimationFrame` depois de montar;
 - na lista, a legenda clicada fica amarela e mostra os quatro ícones de ação. Não existe barra de
   ações no rodapé — foi decisão do Cello.
 

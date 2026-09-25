@@ -8,6 +8,9 @@ export const HOOK_LAYOUTS = [
   ['grifo', 'Grifo'], ['elegante', 'Elegante'], ['condensada', 'Condensada'], ['bojo', 'Bojo'],
 ];
 
+/** Layouts em que cada palavra pode ter o box ligado ou desligado. */
+export const LAYOUTS_COM_BOX = new Set(['grifo', 'elegante']);
+
 export const HOOK_ANIMS = [
   ['pop', 'Pop'], ['subir', 'Subir'], ['karaoke', 'Destaque'],
   ['troca', 'Uma por vez'], ['zoom', 'Zoom'], ['maquina', 'Máquina'],
@@ -17,6 +20,7 @@ export const HOOK_COLORS = ['#E8441F', '#FFD60A', '#C9F24D', '#FFFFFF', '#0A84FF
 
 const COND = 'Helvetica Neue Condensed Bold, Arial Narrow';
 const CLARO = '#F2EEE4';
+const TINTA = '#141414';   // texto dentro do box, se o usuário não escolher outra
 /** As fontes são guardadas pelo nome, igual à aba Estilo. */
 const pilha = (nome) => `"${nome}", "Helvetica Neue", Arial, sans-serif`;
 
@@ -24,13 +28,16 @@ export const DEFAULT_HOOK = Object.freeze({
   layout: 'condensada',
   anim: 'pop',
   color: '#E8441F',
+  boxInk: TINTA,     // cor do texto dentro do box (Grifo, Elegante, ou box ligado na palavra)
+  stroke: true,      // contorno escuro nas letras sem box
+  strokeW: 1,        // espessura do contorno (1 = padrão)
   fontA: 'Helvetica Neue',
   fontB: 'Didot',
   bulge: 0,          // força da lente
   lens: 0.32,        // largura do sino da lente
   speed: 1,          // multiplica a duração da animação
   marks: [],         // índices das palavras em destaque
-  tweaks: {},        // ajustes por palavra: { fam, peso, ital, cor, grifo, escala, dx, dy }
+  tweaks: {},        // ajustes por palavra: { fam, peso, ital, cor, fundo, grifo, escala, dx, dy }
 });
 
 export const hookAt = (hooks, t) => hooks.find((h) => t >= h.start && t < h.end) || null;
@@ -43,14 +50,16 @@ const naipe = (ws, n) => { const o = []; for (let i = 0; i < ws.length; i += n) 
 function montaLinhas(hook) {
   const ws = wordsOf(hook);
   const marcada = (i) => (hook.marks.length ? hook.marks.includes(i) : false);
-  const A = hook.fontA, B = hook.fontB, cor = hook.color;
+  // com palavras em destaque, só elas levam a cor; sem nenhuma, vale o padrão do layout
+  const corOu = (i, padrao) => (hook.marks.length ? (marcada(i) ? cor : CLARO) : padrao);
+  const A = hook.fontA, B = hook.fontB, cor = hook.color, tinta = hook.boxInk || TINTA;
   const condensada = A === DEFAULT_HOOK.fontA ? COND : A;   // só troca por condensada se estiver no padrão
 
   switch (hook.layout) {
     case 'manchete':
       return naipe(ws, 2).map((g, li) => ({
         align: li % 2 ? 'dir' : 'esq', escala: 1,
-        runs: g.map((t, k) => ({ txt: t, fam: A, peso: 700, ital: false, cor: CLARO, i: li * 2 + k })),
+        runs: g.map((t, k) => ({ txt: t, fam: A, peso: 700, ital: false, cor: corOu(li * 2 + k, CLARO), i: li * 2 + k })),
       }));
     case 'mistura':
       return naipe(ws, 3).map((g, li) => {
@@ -59,8 +68,8 @@ function montaLinhas(hook) {
           runs: g.map((t, k) => {
             const i = li * 3 + k;
             return forte
-              ? { txt: t.toUpperCase(), fam: condensada, peso: 800, ital: false, cor, i }
-              : { txt: t, fam: B, peso: 400, ital: true, cor: CLARO, i };
+              ? { txt: t.toUpperCase(), fam: condensada, peso: 800, ital: false, cor: corOu(i, cor), i }
+              : { txt: t, fam: B, peso: 400, ital: true, cor: corOu(i, CLARO), i };
           }) };
       });
     case 'serif':
@@ -80,7 +89,7 @@ function montaLinhas(hook) {
         runs: g.map((t, k) => {
           const i = li * 3 + k;
           const on = hook.marks.length ? hook.marks.includes(i) : i === ws.length - 1;
-          return { txt: t, fam: A, peso: 800, ital: false, cor: on ? '#141414' : CLARO, grifo: on ? cor : null, i };
+          return { txt: t, fam: A, peso: 800, ital: false, cor: on ? tinta : CLARO, grifo: on ? cor : null, i };
         }),
       }));
     case 'elegante':
@@ -91,13 +100,13 @@ function montaLinhas(hook) {
           const serifa = hook.marks.length ? hook.marks.includes(i) : li === 0;
           const curta = t.length <= 4 && li > 0;
           return { txt: t, fam: serifa ? B : A, peso: serifa ? 400 : 800, ital: serifa,
-            cor: CLARO, pilula: curta ? cor : null, i };
+            cor: curta ? tinta : CLARO, pilula: curta ? cor : null, i };
         }),
       }));
     case 'bojo':
       return naipe(ws, 3).map((g, li) => ({
         align: 'centro', escala: li === 1 ? 1.15 : 0.95,
-        runs: g.map((t, k) => ({ txt: t, fam: B, peso: 700, ital: true, cor, i: li * 3 + k })),
+        runs: g.map((t, k) => ({ txt: t, fam: B, peso: 700, ital: true, cor: corOu(li * 3 + k, cor), i: li * 3 + k })),
       }));
     default: {  // condensada
       const linhas = naipe(ws, 3);
@@ -120,17 +129,34 @@ function montaLinhas(hook) {
 
 const fonteCss = (r, px) => `${r.ital ? 'italic ' : ''}${r.peso} ${px}px ${pilha(r.fam)}`;
 
+/**
+ * Aplica os ajustes da palavra. `cor` é sempre a cor das letras e `fundo` a do box —
+ * separadas, para dar para trocar o texto preto de dentro do box.
+ */
 function comAjuste(r, hook) {
   const a = hook.tweaks[r.i];
   if (!a) return { ...r, escalaP: 1, dx: 0, dy: 0 };
+  let grifo = r.grifo || null, pilula = r.pilula || null;
+  const doLayout = !!(grifo || pilula);
+  if (a.grifo === true && !doLayout) {
+    if (hook.layout === 'elegante') pilula = hook.color; else grifo = hook.color;   // o box no formato do layout
+  }
+  if (a.grifo === false) { grifo = null; pilula = null; }
+  if (a.fundo) { if (grifo) grifo = a.fundo; if (pilula) pilula = a.fundo; }
+  const temBox = !!(grifo || pilula);
+  // quem ganhou o box agora usa a cor do texto do box; quem perdeu volta ao claro
+  const corBase = temBox && !doLayout ? (hook.boxInk || TINTA) : !temBox && doLayout ? CLARO : r.cor;
   return { ...r,
     fam: a.fam || r.fam,
     peso: a.peso ?? r.peso,
     ital: a.ital ?? r.ital,
-    cor: a.cor || r.cor,
-    grifo: a.grifo === true ? (a.cor || hook.color) : (a.grifo === false ? null : r.grifo),
+    cor: a.cor || corBase,
+    grifo, pilula,
     escalaP: a.escala ?? 1, dx: a.dx || 0, dy: a.dy || 0 };
 }
+
+/** As palavras como vão ser desenhadas (com os ajustes), para o painel saber quem tem box. */
+export const hookRuns = (hook) => montaLinhas(hook).flatMap((l) => l.runs.map((r) => comAjuste(r, hook)));
 
 function posiciona(ctx, W, H, linhas, hook, escalaGeral) {
   const rel = linhas.map((l) => l.escala * 1.12 * Math.max(1, ...l.runs.map((r) => (hook.tweaks[r.i]?.escala ?? 1))));
@@ -229,14 +255,22 @@ const ANIMS = {
 
 let fora = null, foraCtx = null, saida = null, saidaCtx = null;
 const SS = 1.7;   // o texto é desenhado maior e depois amostrado: borda limpa
+// um par de telas por tamanho: a prévia e as miniaturas dos layouts não ficam
+// realocando a mesma tela grande a cada quadro
+const telasPorTamanho = new Map();
 
-function telas() {
-  if (!fora) {
-    fora = document.createElement('canvas');
-    foraCtx = fora.getContext('2d', { willReadFrequently: true });
-    saida = document.createElement('canvas');
-    saidaCtx = saida.getContext('2d');
+function telas(sw, sh) {
+  const chave = `${sw}x${sh}`;
+  let t = telasPorTamanho.get(chave);
+  if (!t) {
+    if (telasPorTamanho.size >= 4) telasPorTamanho.delete(telasPorTamanho.keys().next().value);
+    const f = document.createElement('canvas');
+    f.width = sw; f.height = sh;
+    const o = document.createElement('canvas');
+    t = { fora: f, foraCtx: f.getContext('2d', { willReadFrequently: true }), saida: o, saidaCtx: o.getContext('2d') };
+    telasPorTamanho.set(chave, t);
   }
+  ({ fora, foraCtx, saida, saidaCtx } = t);
 }
 
 function aplicaLente(ctx, W, H, k, sig, caixa) {
@@ -289,6 +323,7 @@ function pintaTexto(ctx, W, H, hook, t, dur) {
   const fn = ANIMS[hook.anim] || ANIMS.pop;
   const geral = hook.anim === 'zoom' ? fn(n, 0, t, dur) : null;
   let x0 = W, y0 = H, x1 = 0, y1 = 0, achou = false;
+  const contorno = hook.stroke === false ? 0 : (hook.strokeW ?? 1);
 
   ctx.save();
   if (geral) { ctx.translate(W / 2, H / 2); ctx.scale(geral.s, geral.s); ctx.translate(-W / 2, -H / 2); ctx.globalAlpha = geral.a; }
@@ -315,9 +350,11 @@ function pintaTexto(ctx, W, H, hook, t, dur) {
       ctx.fillStyle = p.pilula; ctx.beginPath();
       ctx.roundRect(-p.w / 2 - p.px * 0.3, -p.px * 0.46, p.w + p.px * 0.6, p.px * 0.92, p.px * 0.46); ctx.fill();
     }
-    ctx.lineJoin = 'round'; ctx.lineWidth = p.px * 0.13; ctx.strokeStyle = 'rgba(0,0,0,.5)';
-    ctx.fillStyle = p.pilula ? '#141414' : p.cor;
-    if (!p.grifo && !p.pilula) ctx.strokeText(txt, 0, 0);
+    ctx.fillStyle = p.cor;
+    if (contorno && !p.grifo && !p.pilula) {
+      ctx.lineJoin = 'round'; ctx.lineWidth = p.px * 0.13 * contorno; ctx.strokeStyle = 'rgba(0,0,0,.5)';
+      ctx.strokeText(txt, 0, 0);
+    }
     ctx.fillText(txt, 0, 0);
     ctx.restore();
   });
@@ -333,9 +370,8 @@ export function drawHook(ctx, W, H, hook, t) {
   const dur = Math.max(0.6, (hook.end - hook.start) * 0.85) / (hook.speed || 1);
   const tt = Math.max(0, t);
   if (!(hook.bulge > 0)) { pintaTexto(ctx, W, H, hook, tt, dur); return; }
-  telas();
   const sw = Math.round(W * SS), sh = Math.round(H * SS);
-  if (fora.width !== sw || fora.height !== sh) { fora.width = sw; fora.height = sh; }
+  telas(sw, sh);
   foraCtx.setTransform(SS, 0, 0, SS, 0, 0);
   foraCtx.clearRect(0, 0, W, H);
   const caixa = pintaTexto(foraCtx, W, H, hook, tt, dur);

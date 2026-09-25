@@ -5,7 +5,7 @@ import { probe, extractAudio, exportBurnedIn } from './media.js';
 import { transcribe, MODELS, LANGUAGES, SAMPLE_RATE } from './transcriber.js';
 import { loadStoredFonts, addFont, removeFont } from './fonts.js';
 import { listProjects, getProject, saveProject, deleteProject, fileFromHandle, migrateOldProjects } from './store.js';
-import { drawHook, hookAt, wordsOf, HOOK_LAYOUTS, HOOK_ANIMS, HOOK_COLORS, DEFAULT_HOOK } from './hooks.js';
+import { drawHook, hookAt, wordsOf, hookRuns, LAYOUTS_COM_BOX, HOOK_LAYOUTS, HOOK_ANIMS, HOOK_COLORS, DEFAULT_HOOK } from './hooks.js';
 
 // ---------------------------------------------------------------- estado
 
@@ -513,7 +513,11 @@ function renderAll() {
   $('btnExport').disabled = !hasCaptions();
 }
 
+let abaDoPainel = null;   // para manter a rolagem quando o painel remonta na mesma aba
+
 function renderPanel() {
+  const rolagem = abaDoPainel === state.tab ? panel.querySelector('.panel-body')?.scrollTop || 0 : 0;
+  abaDoPainel = hasCaptions() && !state.busy ? state.tab : null;
   busyEls = null;
   replaceEls = null;
   els.list = null;
@@ -543,12 +547,14 @@ function renderPanel() {
         h('button', { type: 'button', 'aria-pressed': 'false', title: 'Criar um hook com as legendas selecionadas', onclick: createHook }, '+ Novo')));
     }
     panel.replaceChildren(head, h('div', { class: 'panel-body' }, renderHooksBody()));
+    panel.querySelector('.panel-body').scrollTop = rolagem;
   } else {
     head.append(segmented(
       [['all', 'Todas as legendas'], ['selected', `Selecionadas (${state.selection.size})`]], state.styleScope,
       (v) => { state.styleScope = v; renderPanel(); drawPreview(); },
     ));
     panel.replaceChildren(head, h('div', { class: 'panel-body' }, renderStyleBody()));
+    panel.querySelector('.panel-body').scrollTop = rolagem;
   }
 }
 
@@ -696,22 +702,36 @@ function barSlider(label, value, min, max, step, onChange, fmt = (v) => v, { liv
   const z = at(zero);
   const fill = h('span', { class: 'bar-fill' });
   const mark = h('span', { class: 'bar-mark' });
+  const name = h('span', { class: 'bar-name' }, label);
   const out = h('span', { class: 'bar-value' });
+  let atual = value;
   const paint = (v) => {
+    atual = v;
     const p = at(v);
     const a = Math.min(p, z), b = Math.max(p, z);
     fill.style.left = `${a * 100}%`;
     fill.style.width = `${(b - a) * 100}%`;
-    mark.style.left = `${p * 100}%`;
     out.textContent = String(fmt(v));
+    // o risquinho fica na ponta do preenchimento, um pouco para dentro
+    const W = bar.clientWidth;
+    if (!W) { mark.style.left = `${p * 100}%`; return; }
+    const dentro = Math.min(8, ((b - a) * W) / 2);
+    // em %, para continuar no lugar se o painel mudar de largura; nunca colado na borda
+    const x = Math.max(8, Math.min(W - 8, p * W - Math.sign(p - z) * dentro));
+    mark.style.left = `${(x / W) * 100}%`;
+    // e some quando passaria por cima do nome ou do valor
+    const cobre = (el) => x > el.offsetLeft - 6 && x < el.offsetLeft + el.offsetWidth + 6;
+    mark.classList.toggle('sob', cobre(name) || cobre(out));
   };
-  paint(value);
   const input = h('input', {
     type: 'range', min, max, step, value: String(value), 'aria-label': label,
     oninput: (e) => { const v = +e.target.value; paint(v); if (live) onChange(v); },
     onchange: (e) => { if (!live) onChange(+e.target.value); },
   });
-  return h('label', { class: 'bar' }, input, fill, mark, h('span', { class: 'bar-name' }, label), out);
+  const bar = h('label', { class: 'bar' }, input, fill, mark, name, out);
+  paint(value);
+  requestAnimationFrame(() => paint(atual));   // agora que a barra já tem largura
+  return bar;
 }
 
 function regroup(change) {
@@ -864,7 +884,8 @@ function select(id, { toggle = false, range = false }) {
     state.anchorId = id;
   }
   updateRowStates();
-  if (state.tab === 'style') renderPanel();
+  // na aba Hooks sem hook, o botão "Transformar" conta as selecionadas: precisa se atualizar
+  if (state.tab === 'style' || (state.tab === 'hooks' && !currentHook())) renderPanel();
 }
 
 function splitAt(id, tokenIndex) {
@@ -1091,6 +1112,31 @@ function renderStyleBody() {
 // ---------------------------------------------------------------- aba Hooks
 
 let hookWord = null;   // palavra do hook sendo ajustada
+let hookAnimAberta = false;   // animação e velocidade aparecem depois de clicar num layout
+let hookThumbs = [];          // miniaturas dos layouts: { cv, layout }
+
+// frase fixa das miniaturas, com "brown" em destaque, para comparar só o layout
+const THUMB_FRASE = { text: 'The quick brown fox jumps', marks: [2], tweaks: {} };
+
+let thumbsPedido = 0;
+/** Redesenha as miniaturas: fundo preto, frase fixa, com as cores, fontes e contorno do hook. */
+function pintaThumbs() {
+  if (thumbsPedido) return;
+  thumbsPedido = requestAnimationFrame(() => {
+    thumbsPedido = 0;
+    const hk = currentHook();
+    if (!hk) return;
+    for (const { cv, layout } of hookThumbs) {
+      if (!cv.isConnected) continue;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      // 'pop' lá no fim da animação: todas as palavras paradas, no tamanho final
+      drawHook(ctx, cv.width, cv.height,
+        { ...hk, ...THUMB_FRASE, layout, anim: 'pop', bulge: 0, start: 0, end: 10 }, 99);
+    }
+  });
+}
 
 /** Lista de fontes igual à da aba Estilo, guardando só o nome da família. */
 function fontPicker(valor, ao, { comPadrao = false, rotulo = 'Fonte' } = {}) {
@@ -1106,9 +1152,10 @@ function fontPicker(valor, ao, { comPadrao = false, rotulo = 'Fonte' } = {}) {
     h('option', { value: '__upload' }, 'Enviar fonte do computador (.ttf/.otf)…'));
 }
 
-function corPicker(valor, ao) {
+function corPicker(valor, ao, { comPreto = false } = {}) {
+  const cores = comPreto ? ['#141414', ...HOOK_COLORS] : HOOK_COLORS;
   return h('div', { class: 'swatches' },
-    HOOK_COLORS.map((hex) => h('button', { type: 'button', class: 'swatch', style: `background:${hex}`,
+    cores.map((hex) => h('button', { type: 'button', class: 'swatch', style: `background:${hex}`,
       'aria-label': hex, 'aria-pressed': String((valor || '').toUpperCase() === hex),
       onclick: () => ao(hex) })),
     h('label', { class: 'swatch roda', title: 'Qualquer cor' },
@@ -1121,7 +1168,7 @@ function renderHooksBody() {
   if (!hk) {
     const quantas = state.captions.filter((c) => state.selection.has(c.id) && semHook(c)).length;
     return h('div', { class: 'hooks-body' },
-      h('p', { class: 'scope-hint' }, 'Um hook junta legendas seguidas numa frase de destaque, com animação. Selecione as legendas na aba Legendas (⌘-clique para várias, ⇧-clique para um intervalo) e volte aqui.'),
+      h('p', { class: 'scope-hint' }, 'Um hook junta legendas seguidas numa frase de destaque, com animação. Selecione as legendas nos blocos da linha do tempo ou na aba Legendas (⌘-clique para várias, ⇧-clique para um intervalo).'),
       h('button', { class: 'btn primary lg block', type: 'button', disabled: !quantas, onclick: createHook },
         quantas ? `Transformar ${quantas} ${quantas === 1 ? 'legenda' : 'legendas'} em hook` : 'Transformar em hook'));
   }
@@ -1130,15 +1177,18 @@ function renderHooksBody() {
   if (hookWord != null && hookWord >= palavras.length) hookWord = null;
   const ajuste = hookWord != null ? (hk.tweaks[hookWord] = hk.tweaks[hookWord] || {}) : null;
   const rerender = () => { renderPanel(); drawPreview(); };
+  const runs = hookRuns(hk);
+  const comBox = (i) => runs.some((r) => r.i === i && (r.grifo || r.pilula));
 
   const linha = (rot, ...kids) => h('div', { class: 'linha' }, h('span', null, rot), ...kids);
   const chip = (texto, on, ao) => h('button', { class: `chip-mini${on ? ' on' : ''}`, type: 'button', onclick: () => { ao(); rerender(); } }, texto);
-  const faixa = (rot, valor, min, max, passo, ao, fmt = (v) => v) => {
-    const out = h('span', { class: 'val' }, String(fmt(valor)));
-    return linha(rot, h('input', { type: 'range', min, max, step: passo, value: String(valor), 'aria-label': rot,
-      oninput: (e) => { const v = +e.target.value; out.textContent = String(fmt(v)); ao(v); } }), out);
-  };
+  const interruptor = (rot, ligado, ao) => h('label', { class: 'linha' }, h('span', null, rot),
+    h('span', { class: 'switch' },
+      h('input', { type: 'checkbox', checked: ligado, 'aria-label': rot, onchange: (e) => ao(e.target.checked) }),
+      h('span')));
   const pct = (v) => `${Math.round(v * 100)}%`;
+  // a espessura do contorno também muda as miniaturas dos layouts
+  const mudaHook = (patch, tag) => { patchHook(patch, tag); pintaThumbs(); };
 
   const frase = h('textarea', { class: 'hook-frase', spellcheck: 'true', 'aria-label': 'Frase do hook',
     oninput: (e) => { hk.text = e.target.value; drawPreview(); renderTimeline(); scheduleSave(); } });
@@ -1146,49 +1196,81 @@ function renderHooksBody() {
 
   const chips = h('div', { class: 'hook-palavras' }, palavras.map((p, i) => h('button', {
     type: 'button',
-    class: `${hk.marks.includes(i) ? 'marcada' : ''}${hookWord === i ? ' sel' : ''}`,
+    class: `${comBox(i) ? 'marcada' : ''}${hookWord === i ? ' sel' : ''}`,
     title: 'Clique para ajustar só esta palavra',
     onclick: () => { hookWord = hookWord === i ? null : i; rerender(); },
   }, p)));
 
-  const editorPalavra = ajuste ? h('div', { class: 'hook-editor' },
-    linha(`“${palavras[hookWord]}”`,
-      chip(hk.marks.includes(hookWord) ? 'em destaque' : 'sem destaque', hk.marks.includes(hookWord), () => {
-        hk.marks = hk.marks.includes(hookWord) ? hk.marks.filter((x) => x !== hookWord) : [...hk.marks, hookWord];
-        scheduleSave();
-      })),
-    linha('Fonte', fontPicker(ajuste.fam, (v) => { ajuste.fam = v; rerender(); scheduleSave(); }, { comPadrao: true })),
-    linha('Estilo',
-      chip('itálico', !!ajuste.ital, () => { ajuste.ital = !ajuste.ital; scheduleSave(); }),
-      chip('negrito', ajuste.peso === 800, () => { ajuste.peso = ajuste.peso === 800 ? null : 800; scheduleSave(); }),
-      chip('grifo', !!ajuste.grifo, () => { ajuste.grifo = !ajuste.grifo; scheduleSave(); })),
-    linha('Cor', corPicker(ajuste.cor, (v) => { ajuste.cor = ajuste.cor === v ? null : v; rerender(); scheduleSave(); })),
-    faixa('Tamanho', ajuste.escala ?? 1, 0.4, 2.5, 0.05, (v) => { ajuste.escala = v; drawPreview(); scheduleSave(); }, (v) => v.toFixed(2)),
-    faixa('Move ↔', ajuste.dx || 0, -30, 30, 1, (v) => { ajuste.dx = v; drawPreview(); scheduleSave(); }),
-    faixa('Move ↕', ajuste.dy || 0, -30, 30, 1, (v) => { ajuste.dy = v; drawPreview(); scheduleSave(); }),
-    h('button', { class: 'chip-mini', type: 'button', onclick: () => { hk.tweaks[hookWord] = {}; hk.marks = hk.marks.filter((x) => x !== hookWord); rerender(); scheduleSave(); } }, 'Limpar esta palavra'),
-  ) : null;
+  let editorPalavra = null;
+  if (ajuste) {
+    const temBox = comBox(hookWord);
+    const salva = () => { drawPreview(); scheduleSave(); };
+    // o box só se liga e desliga NESTA palavra (as outras não mudam). Aparece nos layouts que
+    // têm box, ou se a palavra já tiver um (para poder tirar)
+    const podeBox = LAYOUTS_COM_BOX.has(hk.layout) || temBox;
+    editorPalavra = h('div', { class: 'hook-editor' },
+      h('div', { class: 'linha' }, h('span', null, `“${palavras[hookWord]}”`),
+        podeBox ? h('label', { class: 'hook-box-toggle' }, h('span', null, 'Box'),
+          h('span', { class: 'switch' },
+            h('input', { type: 'checkbox', checked: temBox, 'aria-label': 'Box nesta palavra',
+              onchange: (e) => { ajuste.grifo = e.target.checked; rerender(); scheduleSave(); } }),
+            h('span'))) : null),
+      linha('Fonte', fontPicker(ajuste.fam, (v) => { ajuste.fam = v; rerender(); scheduleSave(); }, { comPadrao: true })),
+      linha('Estilo',
+        chip('itálico', !!ajuste.ital, () => { ajuste.ital = !ajuste.ital; scheduleSave(); }),
+        chip('negrito', ajuste.peso === 800, () => { ajuste.peso = ajuste.peso === 800 ? null : 800; scheduleSave(); })),
+      linha(temBox ? 'Texto' : 'Cor', corPicker(ajuste.cor, (v) => { ajuste.cor = ajuste.cor === v ? null : v; rerender(); scheduleSave(); }, { comPreto: temBox })),
+      temBox ? linha('Box', corPicker(ajuste.fundo, (v) => { ajuste.fundo = ajuste.fundo === v ? null : v; rerender(); scheduleSave(); })) : null,
+      barSlider('Tamanho', ajuste.escala ?? 1, 0.4, 2.5, 0.05, (v) => { ajuste.escala = v; salva(); }, (v) => v.toFixed(2), { origin: 1 }),
+      barSlider('Move ↔', ajuste.dx || 0, -30, 30, 1, (v) => { ajuste.dx = v; salva(); }),
+      barSlider('Move ↕', ajuste.dy || 0, -30, 30, 1, (v) => { ajuste.dy = v; salva(); }),
+      h('button', { class: 'chip-mini', type: 'button', onclick: () => { hk.tweaks[hookWord] = {}; rerender(); scheduleSave(); } }, 'Limpar esta palavra'),
+    );
+  }
+
+  // layouts em miniatura; clicar num deles abre a animação e a velocidade
+  hookThumbs = [];
+  const grade = h('div', { class: 'hook-layouts' }, HOOK_LAYOUTS.map(([v, nome]) => {
+    const cv = h('canvas', { width: 216, height: 270 });
+    hookThumbs.push({ cv, layout: v });
+    return h('button', { type: 'button', class: 'hook-layout', 'aria-pressed': String(v === hk.layout),
+      title: v === hk.layout ? 'Clique para ver a animação' : `Usar o layout ${nome}`,
+      onclick: () => {
+        if (v === hk.layout) hookAnimAberta = !hookAnimAberta;
+        else { patchHook({ layout: v }); hookAnimAberta = true; }
+        rerender();
+      } }, cv, h('span', null, nome));
+  }));
+  pintaThumbs();
+
+  const animacao = hookAnimAberta ? h('div', { class: 'hook-anim' },
+    h('div', { class: 'hook-anims' }, HOOK_ANIMS.map(([v, nome]) =>
+      chip(nome, v === hk.anim, () => patchHook({ anim: v })))),
+    barSlider('Velocidade', hk.speed, 0.4, 2.5, 0.1, (v) => patchHook({ speed: v }, 'speed'),
+      (v) => `${v.toFixed(1)}×`, { origin: 1 })) : null;
+
+  const layoutTemBox = runs.some((r) => r.grifo || r.pilula);
+  const contorno = hk.stroke !== false;
 
   return h('div', { class: 'hooks-body' },
     frase,
     chips,
     editorPalavra,
     h('div', { class: 'hook-editor' },
-      linha('Layout', h('select', { class: 'pick', 'aria-label': 'Layout',
-        onchange: (e) => { patchHook({ layout: e.target.value }); rerender(); } },
-        HOOK_LAYOUTS.map(([v, n]) => h('option', { value: v, selected: v === hk.layout }, n)))),
-      linha('Animação', h('select', { class: 'pick', 'aria-label': 'Animação',
-        onchange: (e) => { patchHook({ anim: e.target.value }); rerender(); } },
-        HOOK_ANIMS.map(([v, n]) => h('option', { value: v, selected: v === hk.anim }, n)))),
-      faixa('Velocidade', hk.speed, 0.4, 2.5, 0.1, (v) => patchHook({ speed: v }, 'speed'), (v) => `${v.toFixed(1)}×`),
-      linha('Cor', corPicker(hk.color, (v) => { patchHook({ color: v }); rerender(); }))),
+      h('div', { class: 'hook-titulo' }, 'Layout'),
+      grade,
+      animacao),
     h('div', { class: 'hook-editor' },
       linha('Principal', fontPicker(hk.fontA, (v) => { patchHook({ fontA: v || 'Helvetica Neue' }); rerender(); })),
-      linha('Contraste', fontPicker(hk.fontB, (v) => { patchHook({ fontB: v || 'Didot' }); rerender(); }))),
+      linha('Contraste', fontPicker(hk.fontB, (v) => { patchHook({ fontB: v || 'Didot' }); rerender(); })),
+      linha(layoutTemBox ? 'Box' : 'Destaque', corPicker(hk.color, (v) => { patchHook({ color: v }); rerender(); })),
+      layoutTemBox ? linha('Texto no box', corPicker(hk.boxInk || '#141414', (v) => { patchHook({ boxInk: v }); rerender(); }, { comPreto: true })) : null,
+      interruptor('Contorno', contorno, (on) => { patchHook({ stroke: on }); rerender(); }),
+      contorno ? barSlider('Espessura', hk.strokeW ?? 1, 0.2, 2.5, 0.05, (v) => mudaHook({ strokeW: v }, 'strokeW'), pct, { origin: 1 }) : null),
     h('div', { class: 'hook-editor' },
-      faixa('Bojo', hk.bulge, 0, 2, 0.05, (v) => patchHook({ bulge: v }, 'bulge'), pct),
-      faixa('Tamanho', hk.lens, 0.12, 0.9, 0.02, (v) => patchHook({ lens: v }, 'lens'), pct),
-      h('p', { class: 'note' }, 'O bojo entorta as letras como uma lente. O tamanho diz até onde ela alcança.')),
+      barSlider('Bojo', hk.bulge, 0, 2, 0.05, (v) => patchHook({ bulge: v }, 'bulge'), pct),
+      barSlider('Alcance', hk.lens, 0.12, 0.9, 0.02, (v) => patchHook({ lens: v }, 'lens'), pct),
+      h('p', { class: 'note' }, 'O bojo entorta as letras como uma lente. O alcance diz até onde ela chega.')),
     h('p', { class: 'note' }, `Vai de ${C.formatClock(hk.start, true)} a ${C.formatClock(hk.end, true)}. Arraste as bordas do bloco preto na linha do tempo para mudar.`),
     h('button', { class: 'btn soft block', type: 'button', onclick: () => deleteHook(hk.id) }, 'Desfazer este hook'),
   );
