@@ -504,6 +504,7 @@ function renderAll() {
 
 function renderPanel() {
   busyEls = null;
+  replaceEls = null;
   els.list = null;
   if (!hasCaptions() || state.busy) {
     panel.replaceChildren(renderTranscribeCard());
@@ -585,18 +586,16 @@ function captionsHead() {
   const modes = segmented([['words', 'Palavras'], ['lines', 'Linhas'], ['sentences', 'Frases']], s.mode,
     (v) => regroup({ mode: v }), 'Dividir legendas por');
 
-  const params = h('div', { class: 'row' });
+  const params = [];
   if (s.mode === 'words') {
-    params.append(stepper(s.wordsPerCaption, 1, 12, (v) => regroup({ wordsPerCaption: v })),
-      h('span', { class: 'label' }, s.wordsPerCaption === 1 ? 'palavra por legenda' : 'palavras por legenda'));
+    params.push(barSlider('Palavras', s.wordsPerCaption, 1, 12, 1,
+      (v) => regroup({ wordsPerCaption: v }), (v) => `${v} por legenda`));
   } else if (s.mode === 'lines') {
-    params.append(stepper(s.maxCharsPerLine, 10, 60, (v) => regroup({ maxCharsPerLine: v }), 2),
-      h('span', { class: 'label' }, 'letras'),
-      stepper(s.maxLines, 1, 3, (v) => regroup({ maxLines: v })),
-      h('span', { class: 'label' }, s.maxLines === 1 ? 'linha' : 'linhas'));
-  } else {
-    params.append(h('span', { class: 'label' }, 'Uma frase por legenda'));
+    params.push(
+      barSlider('Letras por linha', s.maxCharsPerLine, 10, 60, 2, (v) => regroup({ maxCharsPerLine: v })),
+      barSlider('Linhas', s.maxLines, 1, 3, 1, (v) => regroup({ maxLines: v })));
   }
+
   const more = h('button', { class: 'icon-btn more-btn', type: 'button', 'aria-label': 'Mais opções', html: ICONS.more,
     onclick: (e) => openPopover(e.currentTarget, [
       ['Realinhar texto com o áudio', realignAll],
@@ -607,16 +606,77 @@ function captionsHead() {
 
   const search = h('label', { class: 'search' }, h('span', { html: ICONS.search }),
     h('input', { type: 'search', placeholder: 'Buscar nas legendas', value: state.search, 'aria-label': 'Buscar nas legendas',
-      oninput: (e) => { state.search = e.target.value; renderList(); } }));
+      oninput: (e) => { state.search = e.target.value; renderList(); refreshReplace(); } }));
 
-  return [modes, h('div', { class: 'row between' }, params, more), search];
+  return [modes, ...params, h('div', { class: 'row' }, search, more), replaceRow()];
 }
 
-function stepper(value, min, max, onChange, step = 1) {
-  return h('span', { class: 'stepper' },
-    h('button', { type: 'button', 'aria-label': 'Menos', disabled: value <= min, onclick: () => onChange(clamp(value - step, min, max)) }, '−'),
-    h('output', null, value),
-    h('button', { type: 'button', 'aria-label': 'Mais', disabled: value >= max, onclick: () => onChange(clamp(value + step, min, max)) }, '+'));
+// ---------------------------------------------------------------- substituir
+
+let replaceEls = null;
+
+/** Quantas vezes o texto buscado aparece, somando todas as legendas. */
+function searchHits(needle) {
+  if (!needle.trim()) return 0;
+  return state.captions.reduce((n, c) => n + C.countOccurrences(c.text, needle), 0);
+}
+
+function replaceRow() {
+  const input = h('input', { type: 'text', placeholder: 'Trocar por…', 'aria-label': 'Trocar por',
+    onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); runReplace(); } } });
+  const btn = h('button', { class: 'btn primary', type: 'button', onclick: runReplace });
+  const row = h('div', { class: 'replace' }, input, btn);
+  replaceEls = { row, input, btn };
+  paintReplace();
+  return row;
+}
+
+function paintReplace() {
+  if (!replaceEls) return;
+  const q = state.search.trim();
+  const n = searchHits(q);
+  replaceEls.row.hidden = !q;
+  replaceEls.btn.textContent = n ? `Trocar ${n}` : 'Trocar';
+  replaceEls.btn.disabled = !n;
+}
+
+function refreshReplace() { paintReplace(); }
+
+function runReplace() {
+  const needle = state.search.trim();
+  if (!needle || !replaceEls) return;
+  const to = replaceEls.input.value;
+  let total = 0;
+  const next = state.captions.map((c) => {
+    const r = C.replaceOccurrences(c.text, needle, to);
+    total += r.count;
+    return r.count ? { ...c, text: r.text } : c;
+  });
+  if (!total) { toast('Nada encontrado para trocar.'); return; }
+  pushUndo();
+  state.captions = next;
+  state.search = '';
+  replaceEls.input.value = '';
+  refreshAfterEdit(true);
+  toast(`${total} ${total === 1 ? 'troca feita' : 'trocas feitas'}. ⌘Z desfaz.`);
+}
+
+/** Bloco-slider: a barra inteira é o controle, como nas referências. */
+function barSlider(label, value, min, max, step, onChange, fmt = (v) => v) {
+  const pct = (v) => `${Math.max(0, Math.min(100, ((v - min) / (max - min)) * 100))}%`;
+  const fill = h('span', { class: 'bar-fill' });
+  fill.style.width = pct(value);
+  const out = h('span', { class: 'bar-value' }, String(fmt(value)));
+  const input = h('input', {
+    type: 'range', min, max, step, value: String(value), 'aria-label': label,
+    oninput: (e) => {
+      const v = +e.target.value;
+      fill.style.width = pct(v);
+      out.textContent = String(fmt(v));
+      onChange(v);
+    },
+  });
+  return h('label', { class: 'bar' }, input, fill, h('span', { class: 'bar-name' }, label), out);
 }
 
 function regroup(change) {
@@ -646,15 +706,16 @@ function renderList() {
   list.replaceChildren(...rows);
   if (!rows.length) list.append(h('li', { class: 'list-empty' }, q ? `Nada encontrado para “${state.search}”.` : 'Nenhuma legenda.'));
   updateRowStates();
+  paintReplace();
 }
 
 function captionRow(c, i) {
   const ta = h('textarea', { class: 'cap-text', rows: 1, spellcheck: 'true', placeholder: 'Nova legenda', 'aria-label': `Legenda ${i + 1}` });
   ta.value = c.text;
   return h('li', { class: 'cap', dataset: { id: c.id } },
-    h('div', { class: 'cap-num', title: 'Selecionar (⌘-clique para várias)' }, i + 1),
     ta,
     h('div', { class: 'cap-meta' },
+      h('span', { class: 'cap-num', title: 'Selecionar (⌘-clique para várias)' }, i + 1),
       h('span', { class: 'cap-time' }, `${C.formatClock(c.start, true)} – ${C.formatClock(c.end, true)}`),
       c.style ? h('span', { class: 'dot', title: 'Estilo próprio' }) : null,
       h('span', { class: 'cap-actions' },
@@ -861,7 +922,7 @@ function refreshAfterEdit(structural) {
     if (state.tab === 'captions' && els.list) {
       // mantém o topo dos parâmetros de divisão em dia sem perder a busca
       const head = panel.querySelector('.panel-head');
-      if (head) head.replaceChildren(head.firstChild, ...captionsHead());
+      if (head) { replaceEls = null; head.replaceChildren(head.firstChild, ...captionsHead()); }
       renderList();
     } else renderPanel();
     renderTimeline();
@@ -908,31 +969,26 @@ function renderStyleBody() {
   }
   const st = currentStyle();
   const rerender = () => { renderPanel(); drawPreview(); };
-
-  const group = (title, ...kids) => h('section', { class: 'group' }, h('div', { class: 'group-title' }, title), ...kids);
-  const slider = (label, key, min, max, step, fmt = (v) => v) => {
-    const out = h('output', null, fmt(st[key]));
-    return h('div', { class: 'field' },
-      h('span', { class: 'label' }, label),
-      h('div', { class: 'slider' },
-        h('input', { type: 'range', min, max, step, value: String(st[key]), 'aria-label': label,
-          oninput: (e) => { const v = +e.target.value; out.textContent = fmt(v); applyStyle({ [key]: v }, key); } }),
-        out));
-  };
   const pct = (v) => `${Math.round(v * 100)}%`;
+  const deg = (v) => `${Math.round(v)}%`;
+
+  const bar = (label, key, min, max, step, fmt = (v) => v) =>
+    barSlider(label, st[key], min, max, step, (v) => applyStyle({ [key]: v }, key), fmt);
+
   const swatches = (key) => h('div', { class: 'swatches' },
     SWATCHES.map((hex) => h('button', { type: 'button', class: 'swatch', style: `background:${hex}`, 'aria-label': hex,
       'aria-pressed': String(st[key].toUpperCase() === hex), onclick: () => { applyStyle({ [key]: hex }); rerender(); } })),
     h('label', { class: 'swatch custom', title: 'Outra cor' },
       h('input', { type: 'color', value: st[key].length === 7 ? st[key] : '#ffffff', 'aria-label': 'Outra cor',
         oninput: (e) => applyStyle({ [key]: e.target.value.toUpperCase() }, key), onchange: rerender })));
-  const toggle = (key, label) => h('label', { class: 'row between' }, h('span', null, label),
+
+  const toggle = (key, label) => h('label', { class: 'opt' }, h('span', null, label),
     h('span', { class: 'switch' },
       h('input', { type: 'checkbox', checked: !!st[key], 'aria-label': label, onchange: (e) => { applyStyle({ [key]: e.target.checked }); rerender(); } }),
       h('span')));
 
   const families = [...new Set([...FONTS, ...state.fonts.map((f) => f.family), st.font])];
-  const fontSelect = h('select', { class: 'select', 'aria-label': 'Fonte',
+  const fontSelect = h('select', { class: 'pick', 'aria-label': 'Fonte',
     onchange: (e) => {
       let v = e.target.value;
       if (v === '__upload') { rerender(); pickFontFile(); return; }
@@ -953,44 +1009,48 @@ function renderStyleBody() {
     : null;
 
   const presets = h('div', { class: 'presets' }, PRESETS.map((p) => {
-    const cv = h('canvas', { width: 160, height: 100 });
+    const cv = h('canvas', { width: 168, height: 112 });
     requestAnimationFrame(() => {
       const ctx = cv.getContext('2d');
-      drawCaption(ctx, 160, 100, 'Legenda', { ...C.DEFAULT_STYLE, ...p.style, size: p.style.size * 3.4, strokeWidth: (p.style.strokeWidth || 4) * 2.4, posY: 50 });
+      drawCaption(ctx, 168, 112, 'Legenda', { ...C.DEFAULT_STYLE, ...p.style, size: p.style.size * 3.4, strokeWidth: (p.style.strokeWidth || 4) * 2.4, posY: 50, posX: 50 });
     });
     return h('button', { type: 'button', class: 'preset', onclick: () => {
       applyStyle({ ...p.style });
-      if (state.styleScope === 'all') for (const c of state.captions) c.style = null; // um modelo em “Todas” deixa tudo igual
+      if (state.styleScope === 'all') for (const c of state.captions) c.style = null;
       rerender();
     } }, cv, p.name);
   }));
 
+  const weightName = (WEIGHTS.find(([w]) => w === st.weight) || [0, '—'])[1];
+  const hero = h('div', { class: 'hero' },
+    h('div', { class: 'hero-top' },
+      h('h3', null, st.font),
+      h('span', { class: 'hero-dot', style: `background:${st.color}` })),
+    h('div', { class: 'hero-bot' },
+      h('div', { class: 'hero-metas' },
+        h('div', { class: 'hero-meta' }, h('i', null, 'Peso'), h('b', null, weightName)),
+        h('div', { class: 'hero-meta' }, h('i', null, 'Contorno'), h('b', null, st.stroke ? String(st.strokeWidth) : 'sem'))),
+      h('div', { class: 'hero-size' }, String(Math.round(st.size)), h('sup', null, 'px'))));
+
   return h('div', { class: 'style-body' },
-    group('Modelos prontos', presets),
-    group('Texto',
-      fontSelect,
-      fontChips,
-      segmented(WEIGHTS.map(([w, n]) => [w, n]), st.weight, (v) => { applyStyle({ weight: v }); rerender(); }, 'Peso'),
-      slider('Tamanho', 'size', 24, 180, 1),
-      swatches('color')),
-    group('Contorno',
-      toggle('stroke', 'Contorno nas letras'),
-      st.stroke ? slider('Espessura', 'strokeWidth', 1, 16, 0.5) : null,
-      st.stroke ? swatches('strokeColor') : null),
-    group('Fundo',
-      toggle('box', 'Caixa atrás do texto'),
-      st.box ? swatches('boxColor') : null,
-      st.box ? slider('Opacidade da caixa', 'boxOpacity', 0.1, 1, 0.05, pct) : null,
-      toggle('shadow', 'Sombra')),
-    group('Posição',
-      slider('Altura (cima e baixo)', 'posY', 5, 95, 1, (v) => `${Math.round(v)}%`),
-      slider('Lado (esquerda e direita)', 'posX', 5, 95, 1, (v) => `${Math.round(v)}%`),
-      h('button', { class: 'btn soft block', type: 'button', onclick: () => { applyStyle({ posX: 50 }); rerender(); } }, 'Centralizar na horizontal'),
-      h('p', { class: 'note' }, 'Dica: arraste a legenda direto no vídeo, para os lados e para cima e para baixo.')),
-    group('Maiúsculas e pontuação',
-      segmented([['original', 'Como falado'], ['upper', 'MAIÚSCULAS'], ['lower', 'minúsculas']], st.textCase,
-        (v) => { applyStyle({ textCase: v }); rerender(); }, 'Maiúsculas'),
-      toggle('stripPunct', 'Remover pontuação')),
+    hero,
+    presets,
+    fontSelect,
+    fontChips,
+    segmented(WEIGHTS.map(([w, n]) => [w, n]), st.weight, (v) => { applyStyle({ weight: v }); rerender(); }, 'Peso'),
+    bar('Tamanho', 'size', 24, 180, 1),
+    h('div', { class: 'opt' }, h('span', null, 'Cor'), swatches('color')),
+    toggle('stroke', 'Contorno'),
+    st.stroke ? bar('Espessura', 'strokeWidth', 1, 16, 0.5) : null,
+    st.stroke ? h('div', { class: 'opt' }, h('span', null, 'Cor do contorno'), swatches('strokeColor')) : null,
+    h('div', { class: 'opt-2' }, toggle('box', 'Caixa'), toggle('shadow', 'Sombra')),
+    st.box ? h('div', { class: 'opt' }, h('span', null, 'Cor da caixa'), swatches('boxColor')) : null,
+    st.box ? bar('Opacidade', 'boxOpacity', 0.1, 1, 0.05, pct) : null,
+    bar('Altura', 'posY', 5, 95, 1, deg),
+    bar('Lado', 'posX', 5, 95, 1, (v) => (Math.round(v) === 50 ? 'centro' : deg(v))),
+    segmented([['original', 'Como falado'], ['upper', 'MAIÚSCULAS'], ['lower', 'minúsculas']], st.textCase,
+      (v) => { applyStyle({ textCase: v }); rerender(); }, 'Maiúsculas'),
+    toggle('stripPunct', 'Remover pontuação'),
     state.styleScope === 'selected'
       ? h('button', { class: 'btn soft block', type: 'button', onclick: () => {
         pushUndo();

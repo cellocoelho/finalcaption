@@ -57,6 +57,65 @@ export function renderText(text, style) {
 
 export const endsSentence = (w) => /[.!?…]["”»)]*$/.test(w.trim());
 
+// ---------- Buscar e substituir ----------
+
+/** Texto sem acento e em minúsculas, para comparar do mesmo jeito que a busca. */
+export const foldText = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
+/** Índice: para cada letra do texto "dobrado", onde ela começa no texto original. */
+function foldIndex(text) {
+  let folded = '';
+  const at = [];
+  for (let i = 0; i < text.length; i++) {
+    const f = foldText(text[i]);
+    for (let k = 0; k < f.length; k++) at.push(i);
+    folded += f;
+  }
+  return { folded, at };
+}
+
+const isUpper = (c) => c && c !== c.toLowerCase();
+
+/**
+ * Troca todas as ocorrências de `needle` por `replacement`, ignorando acentos e
+ * maiúsculas — igual à busca. Uma ocorrência que começava com maiúscula continua
+ * com maiúscula. Devolve o texto novo e quantas trocas foram feitas.
+ */
+export function replaceOccurrences(text, needle, replacement) {
+  const target = foldText(needle);
+  if (!target) return { text, count: 0 };
+  const { folded, at } = foldIndex(text);
+  let out = '', last = 0, from = 0, count = 0;
+  for (;;) {
+    const hit = folded.indexOf(target, from);
+    if (hit < 0) break;
+    const start = at[hit];
+    const lastLetter = hit + target.length - 1;
+    const end = lastLetter + 1 < at.length ? at[lastLetter + 1] : text.length;
+    let piece = replacement;
+    if (isUpper(text[start]) && !isUpper(piece[0])) piece = piece.charAt(0).toUpperCase() + piece.slice(1);
+    out += text.slice(last, start) + piece;
+    last = end;
+    from = hit + target.length;
+    count++;
+  }
+  return { text: out + text.slice(last), count };
+}
+
+/** Quantas vezes `needle` aparece no texto (mesma regra da busca). */
+export function countOccurrences(text, needle) {
+  const target = foldText(needle);
+  if (!target) return 0;
+  const { folded } = foldIndex(text);
+  let n = 0, from = 0;
+  for (;;) {
+    const hit = folded.indexOf(target, from);
+    if (hit < 0) return n;
+    n++;
+    from = hit + target.length;
+  }
+}
+
 // ---------- Limpeza da transcrição ----------
 
 const HALLUCINATIONS = /amara\.org|legendas pela comunidade|legendado por|subtitles by|obrigad[oa] por assistir/i;

@@ -72,7 +72,9 @@ O que cada módulo contém:
   - `segment` (modos palavras, linhas e frases), `normalizeTiming`;
   - `retime` e `timedWords` (LCS entre o texto editado e as palavras transcritas), `realign`;
   - `splitCaption`, `mergeCaptions`, `captionAt`;
-  - `renderText` (maiúsculas e pontuação), `toSRT`, `toFCPXML`.
+  - `renderText` (maiúsculas e pontuação), `toSRT`, `toFCPXML`;
+  - `foldText`, `countOccurrences` e `replaceOccurrences` (buscar e substituir sem acento e sem
+    caixa, mantendo a maiúscula inicial da ocorrência).
 - `render.js`: a mesma função `drawCaption` serve à prévia e ao MP4, então o resultado é WYSIWYG.
 - `media.js`:
   - `extractAudio` converte para WAV mono 16 kHz com `Conversion` do mediabunny;
@@ -88,6 +90,8 @@ O que cada módulo contém:
     cabeça. Ocupa o vão livre (até 1 s); se estiver tudo colado, tira metade da próxima legenda;
     tecla N faz o mesmo. Legenda vazia não sai no SRT, no FCPXML nem no MP4;
   - aba Estilo com escopo "Todas as legendas" ou "Selecionadas";
+  - buscar e substituir: com algo na busca, aparece a linha "Trocar por…" com a contagem de
+    ocorrências; `runReplace` troca em todas as legendas de uma vez (um único `pushUndo`);
   - linha do tempo com forma de onda, blocos e bordas arrastáveis;
   - a altura da linha do tempo é ajustável pela alça `#tlGrip` (120 px até 70% da janela, no máximo
     560; duplo clique volta a 150). A faixa de pegada é a largura toda, 18 px de altura. **Nada
@@ -194,6 +198,19 @@ Limpo, estilo Apple:
 - cores: branco `#fff`, névoa `#f5f5f7`, tinta `#1d1d1f`, cinza `#6e6e73`;
 - **amarelo de legenda `#FFD60A`** como única cor forte (legenda ativa e linha do tempo);
 - fonte do sistema e botões em pílula preta.
+
+O painel da direita segue uma linguagem própria, tirada das referências do Cello
+(Iconly, barras do Instagram, widgets de "active settings"):
+
+- **sem borda, sem linha divisória, sem sombra** — o que separa é o preenchimento cinza e o espaço;
+- cantos bem arredondados: 20 px nos blocos, 24 px no cartão, pílula nas abas, busca e botões;
+- cada controle é um bloco de 64 px de altura, não uma linha espremida;
+- os sliders são a barra inteira (`.bar`): um `input[type=range]` invisível por cima, `.bar-fill`
+  desenha o preenchimento (com `min-width` para o traço não cair em cima do rótulo), nome à
+  esquerda e valor à direita. Use `barSlider()`;
+- `.hero` resume o estilo atual: fonte, círculo da cor, peso, contorno e o tamanho em número grande;
+- na lista, a legenda clicada fica amarela e mostra os quatro ícones de ação. Não existe barra de
+  ações no rodapé — foi decisão do Cello.
 
 Textos da interface em português, frases curtas, em caixa normal.
 

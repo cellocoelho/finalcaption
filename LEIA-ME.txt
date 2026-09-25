@@ -58,6 +58,14 @@ Legendas
   - Ao lado dos botões de zoom (− +) ficam Desfazer e Refazer.
   - Menu "…": Realinhar texto com o áudio, Transcrever de novo, Desfazer, Refazer.
 
+Trocar uma palavra em todas as legendas
+  - Digite a palavra na busca. O app mostra só as legendas que têm ela.
+  - Logo abaixo aparece "Trocar por…". Escreva a palavra nova e clique no botão,
+    que já diz quantas trocas vai fazer (por exemplo, "Trocar 12"). Enter também vale.
+  - A busca não liga para acento nem maiúscula: procurar "camera" acha "Câmera" e
+    "CAMERA". Onde a palavra começava com maiúscula, a nova entra com maiúscula.
+  - ⌘Z desfaz todas as trocas de uma vez.
+
 Estilo
   - "Todas as legendas" muda o visual de todas.
   - "Selecionadas" muda só as que você escolheu (⌘-clique no número da legenda para

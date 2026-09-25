@@ -71,5 +71,18 @@ test('FCPXML com offsets exatos em quadros', () => {
   assert.match(xml, /Teste &amp; &quot;vídeo&quot;/);
   assert.match(xml, /strokeWidth="-4"/);
 });
+test('buscar e substituir ignora acento e maiúscula', () => {
+  const r1 = C.replaceOccurrences('Você viu? voce viu.', 'voce', 'tu');
+  assert.equal(r1.text, 'Tu viu? tu viu.');
+  assert.equal(r1.count, 2);
+
+  const r2 = C.replaceOccurrences('A camera e a CÂMERA', 'câmera', 'lente');
+  assert.equal(r2.text, 'A lente e a Lente');
+  assert.equal(r2.count, 2);
+
+  assert.equal(C.countOccurrences('ola ola OLÁ', 'olá'), 3);
+  assert.equal(C.replaceOccurrences('nada aqui', 'xyz', 'abc').count, 0);
+  assert.equal(C.replaceOccurrences('teste', '', 'x').text, 'teste');
+});
 
 console.log(`\n${passed} testes passaram.`);
