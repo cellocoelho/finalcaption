@@ -4,11 +4,12 @@ import { drawCaption } from './render.js';
 import { probe, extractAudio, exportBurnedIn } from './media.js';
 import { transcribe, MODELS, LANGUAGES, SAMPLE_RATE } from './transcriber.js';
 import { loadStoredFonts, addFont, removeFont } from './fonts.js';
+import { listProjects, getProject, saveProject, deleteProject, fileFromHandle, migrateOldProjects } from './store.js';
 
 // ---------------------------------------------------------------- estado
 
 const state = {
-  file: null, fileKey: null, url: null, info: null,
+  file: null, fileKey: null, fileHandle: null, thumb: null, url: null, info: null,
   audio: null,           // { promise, progress, error, samples }
   peaks: null,           // Float32Array, 100 valores por segundo
   transcript: [], captions: [],
@@ -128,7 +129,6 @@ const fold = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 // ---------------------------------------------------------------- salvar
 
 const PREFS_KEY = 'finalcaptions:prefs:v1';
-const projectKey = (k) => `finalcaptions:project:v1:${k}`;
 
 function loadPrefs() {
   try {
@@ -147,25 +147,33 @@ function loadPrefs() {
 let saveTimer = null;
 function scheduleSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveNow, 500);
-}
-function saveNow() {
-  const prefs = { style: state.style, seg: state.seg, language: state.language, modelKey: state.modelKey, tlHeight: state.tlHeight, safeArea: state.safeArea, skim: state.skim };
-  const data = JSON.stringify({ transcript: state.transcript, captions: state.captions, ...prefs, savedAt: Date.now() });
-  const write = () => {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-    if (state.fileKey && hasCaptions()) localStorage.setItem(projectKey(state.fileKey), data);
-  };
-  try { write(); } catch {
-    // sem espaço: remove projetos antigos e tenta de novo
-    Object.keys(localStorage).filter((k) => k.startsWith('finalcaptions:project:') && k !== projectKey(state.fileKey))
-      .forEach((k) => localStorage.removeItem(k));
-    try { write(); } catch { toast('Não foi possível salvar o progresso neste navegador.'); }
-  }
+  saveTimer = setTimeout(saveNow, 400);
 }
 
-function loadProject(key) {
-  try { return JSON.parse(localStorage.getItem(projectKey(key)) || 'null'); } catch { return null; }
+function savePrefs() {
+  const prefs = { style: state.style, seg: state.seg, language: state.language, modelKey: state.modelKey, tlHeight: state.tlHeight, safeArea: state.safeArea, skim: state.skim };
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* sem espaço */ }
+}
+
+/** Guarda o projeto inteiro no IndexedDB, junto com a miniatura e o atalho para o arquivo. */
+async function saveNow() {
+  clearTimeout(saveTimer);
+  savePrefs();
+  if (!state.fileKey || !hasCaptions()) return;
+  const prev = await getProject(state.fileKey);
+  const ok = await saveProject({
+    key: state.fileKey,
+    name: state.file?.name || prev?.name || 'vídeo',
+    savedAt: Date.now(),
+    captionCount: state.captions.length,
+    duration: duration() || prev?.duration || 0,
+    transcript: state.transcript,
+    captions: state.captions,
+    style: state.style, seg: state.seg, language: state.language,
+    handle: state.fileHandle || prev?.handle || null,
+    thumb: state.thumb || prev?.thumb || null,
+  });
+  if (!ok) toast('Não foi possível salvar o progresso neste navegador.');
 }
 
 // ---------------------------------------------------------------- desfazer
@@ -212,23 +220,28 @@ function redo() {
 
 function setView(v) { app.dataset.view = v; }
 
-async function loadFile(file) {
+async function loadFile(file, { handle = null, project = null } = {}) {
   if (!file) return;
   if (!/^video\//.test(file.type) && !/\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name)) {
     toast('Escolha um arquivo de vídeo, como MP4 ou MOV.');
     return;
   }
   state.busy?.abort?.();
-  if (state.fileKey) saveNow();
+  if (state.fileKey) await saveNow();
   if (state.url) URL.revokeObjectURL(state.url);
 
+  const key = `${file.name}|${file.size}|${file.lastModified}`;
+  // veio de um projeto da lista: fica com esse projeto mesmo que o arquivo tenha mudado de data
+  const saved = project || await getProject(key);
+  if (project && project.key !== key) await deleteProject(project.key);
+
   Object.assign(state, {
-    file, fileKey: `${file.name}|${file.size}|${file.lastModified}`, url: URL.createObjectURL(file), info: null,
+    file, fileKey: key, fileHandle: handle || saved?.handle || null, thumb: saved?.thumb || null,
+    url: URL.createObjectURL(file), info: null,
     audio: null, peaks: null, transcript: [], captions: [], busy: null,
     selection: new Set(), anchorId: null, activeId: null, undo: [], redo: [], search: '', tab: 'captions',
   });
   loadPrefs();
-  const saved = loadProject(state.fileKey);
   if (saved?.transcript?.length) {
     state.transcript = saved.transcript;
     state.captions = saved.captions || C.segment(saved.transcript, state.seg);
@@ -242,7 +255,8 @@ async function loadFile(file) {
   video.src = state.url;
   setView('work');
   renderAll();
-  if (saved?.transcript?.length) toast('Legendas deste vídeo restauradas.');
+  if (saved?.transcript?.length) toast('Projeto restaurado de onde você parou.');
+  if (handle && !saved) scheduleSave();
 
   try {
     state.info = await probe(file);
@@ -253,6 +267,104 @@ async function loadFile(file) {
   }
   renderTimeline();
   startAudio();
+}
+
+// ---------------------------------------------------------------- projetos salvos
+
+let pendingProject = null;   // projeto esperando o usuário achar o vídeo de novo
+
+/** Abre o seletor de arquivos. Quando o navegador deixa, guarda o atalho para o vídeo. */
+async function pickVideo(project = null) {
+  if (window.showOpenFilePicker) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        multiple: false,
+        types: [{ description: 'Vídeo', accept: { 'video/*': ['.mp4', '.mov', '.m4v', '.webm', '.mkv'] } }],
+      });
+      loadFile(await handle.getFile(), { handle, project });
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') return;   // o usuário fechou a janela
+    }
+  }
+  pendingProject = project;
+  $('fileInput').click();
+}
+
+async function openRecent(key) {
+  const p = await getProject(key);
+  if (!p) { renderRecents(); return; }
+  const file = p.handle ? await fileFromHandle(p.handle) : null;
+  if (file) { loadFile(file, { handle: p.handle, project: p }); return; }
+  toast(`Ache de novo o arquivo “${p.name}”. As legendas continuam salvas.`);
+  pickVideo(p);
+}
+
+function agoText(ts) {
+  if (!ts) return '';
+  const dias = Math.floor((Date.now() - ts) / 86400000);
+  if (dias <= 0) return 'hoje';
+  if (dias === 1) return 'ontem';
+  if (dias < 30) return `há ${dias} dias`;
+  return new Date(ts).toLocaleDateString('pt-BR');
+}
+
+function recentCard(p) {
+  const thumb = h('span', { class: 'rc-thumb' });
+  if (p.thumb) {
+    const url = URL.createObjectURL(p.thumb);
+    thumb.append(h('img', { src: url, alt: '', onload: () => URL.revokeObjectURL(url) }));
+  }
+  return h('div', { class: 'rc' },
+    h('button', { class: 'rc-open', type: 'button', title: p.name, onclick: () => openRecent(p.key) },
+      thumb,
+      h('span', { class: 'rc-name' }, p.name),
+      h('span', { class: 'rc-meta' },
+        `${p.captionCount} ${p.captionCount === 1 ? 'legenda' : 'legendas'} · ${agoText(p.savedAt)}`)),
+    h('button', {
+      class: 'rc-del', type: 'button', title: 'Tirar da lista',
+      'aria-label': `Tirar ${p.name} da lista`, html: '&times;',
+      onclick: async (e) => { e.stopPropagation(); await deleteProject(p.key); renderRecents(); },
+    }));
+}
+
+async function renderRecents() {
+  const el = $('recents');
+  const list = await listProjects();
+  if (!list.length) { el.hidden = true; el.replaceChildren(); return; }
+  el.hidden = false;
+  el.replaceChildren(
+    h('p', { class: 'recents-title' }, 'Continuar de onde parou'),
+    h('div', { class: 'recents-grid' }, list.slice(0, 4).map(recentCard)),
+  );
+}
+
+/** Miniatura para o card do projeto: um quadro do começo do vídeo. */
+async function captureThumb() {
+  try {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return;
+    const w = 320, hh = Math.max(1, Math.round((w * vh) / vw));
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = hh;
+    cv.getContext('2d').drawImage(video, 0, 0, w, hh);
+    const blob = await new Promise((r) => cv.toBlob(r, 'image/jpeg', 0.6));
+    if (!blob) return;
+    state.thumb = blob;
+    scheduleSave();
+  } catch { /* vídeo que o Chrome não decodifica */ }
+}
+
+function grabThumbOnce() {
+  const d = duration();
+  if (!(d > 2)) { captureThumb(); return; }
+  const back = video.currentTime || 0;
+  const done = () => {
+    video.removeEventListener('seeked', done);
+    captureThumb().then(() => { video.currentTime = back; });
+  };
+  video.addEventListener('seeked', done);
+  video.currentTime = Math.min(2, d * 0.15);
 }
 
 function startAudio() {
@@ -1150,6 +1262,10 @@ function bindStage() {
     if (d > 0 && timeline.clientWidth) state.zoom = clamp((timeline.clientWidth - 40) / d, 12, 120);
     layoutOverlay(); renderTimeline(); updateTransport();
   });
+  video.addEventListener('loadeddata', function once() {
+    video.removeEventListener('loadeddata', once);
+    if (!state.thumb) grabThumbOnce();
+  });
   video.addEventListener('play', () => { stopSkim(false); updateTransport(); requestAnimationFrame(loop); });
   video.addEventListener('pause', () => { updateTransport(); tick(); });
   video.addEventListener('seeked', tick);
@@ -1582,9 +1698,15 @@ function bindKeys() {
 
 function bindFiles() {
   const input = $('fileInput');
-  $('btnChoose').addEventListener('click', () => input.click());
-  $('btnNew').addEventListener('click', () => input.click());
-  input.addEventListener('change', () => { loadFile(input.files[0]); input.value = ''; });
+  $('btnChoose').addEventListener('click', () => pickVideo());
+  $('btnNew').addEventListener('click', () => pickVideo());
+  input.addEventListener('change', () => {
+    const f = input.files[0];
+    const project = pendingProject;
+    pendingProject = null;
+    input.value = '';
+    loadFile(f, { project });
+  });
   $('fontInput').addEventListener('change', (e) => {
     const f = e.target.files[0];
     e.target.value = '';
@@ -1593,16 +1715,26 @@ function bindFiles() {
   const drop = $('dropZone');
   window.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
   window.addEventListener('dragleave', (e) => { if (!e.relatedTarget) drop.classList.remove('over'); });
-  window.addEventListener('drop', (e) => {
+  window.addEventListener('drop', async (e) => {
     e.preventDefault();
     drop.classList.remove('over');
     const files = [...(e.dataTransfer?.files || [])];
+    // os handles precisam ser pedidos antes de qualquer espera, senão o DataTransfer expira
+    const pedidos = [...(e.dataTransfer?.items || [])]
+      .filter((i) => i.kind === 'file' && i.getAsFileSystemHandle)
+      .map((i) => i.getAsFileSystemHandle().catch(() => null));
+
     const font = files.find((f) => /\.(ttf|otf)$/i.test(f.name));
     if (font) { installFont(font); return; }
     const file = files.find((f) => /^video\//.test(f.type) || /\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name));
-    if (file) loadFile(file); else toast('Solte um arquivo de vídeo, como MP4 ou MOV.');
+    if (!file) { toast('Solte um arquivo de vídeo, como MP4 ou MOV.'); return; }
+    const handles = await Promise.all(pedidos);
+    const handle = handles.find((hd) => hd?.kind === 'file' && hd.name === file.name) || null;
+    loadFile(file, { handle });
   });
-  window.addEventListener('beforeunload', () => { if (state.fileKey) saveNow(); });
+  // IndexedDB não termina de gravar durante o beforeunload: salvamos ao trocar de aba também
+  document.addEventListener('visibilitychange', () => { if (document.hidden && state.fileKey) saveNow(); });
+  window.addEventListener('pagehide', () => { if (state.fileKey) saveNow(); });
 }
 
 function checkEnvironment() {
@@ -1634,3 +1766,4 @@ bindKeys();
 checkEnvironment();
 updateTransport();
 initFonts();
+migrateOldProjects().then(renderRecents).catch(() => renderRecents());

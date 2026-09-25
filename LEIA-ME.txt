@@ -79,7 +79,21 @@ Atalhos: Espaço (play/pausa), N (nova legenda), S (prévia seguindo o mouse),
 ⌘Z (desfazer), ⇧⌘Z (refazer),
 setas ← → (legenda anterior/próxima), Delete (excluir as selecionadas).
 
-O app salva sozinho. Se abrir o mesmo vídeo de novo, as legendas voltam como estavam.
+PROJETOS SALVOS
+---------------
+O app salva sozinho, o tempo todo. Quando você abrir o FinalCaptions de novo, a tela
+inicial mostra "Continuar de onde parou" com os últimos projetos: miniatura do vídeo,
+quantas legendas tem e quando você mexeu pela última vez.
+
+  - Clique no card e ele volta exatamente como estava.
+  - Se o Chrome pedir permissão para abrir o arquivo, clique em "Ver arquivos" — é ele
+    conferindo se você autoriza o app a ler aquele vídeo de novo.
+  - Se você tiver movido, renomeado ou apagado o vídeo, o app pede para você achar o
+    arquivo. As legendas continuam salvas e grudam no vídeo que você escolher.
+  - O × no canto do card tira o projeto da lista (não apaga o vídeo).
+
+Os projetos ficam guardados no seu navegador, não na internet. Limpar os dados de
+navegação do Chrome apaga os projetos.
 
 
 EXPORTAR (botão "Exportar")

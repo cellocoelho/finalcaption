@@ -56,6 +56,7 @@ app/js/core.js                lógica pura, sem DOM (testável no Node)
 app/js/render.js              drawCaption: desenha a legenda num canvas
 app/js/media.js               mediabunny: probe, extractAudio, exportBurnedIn
 app/js/fonts.js               fontes .ttf/.otf enviadas: lê o nome real, registra e guarda no IndexedDB
+app/js/store.js               projetos salvos no IndexedDB: legendas, miniatura e atalho para o arquivo
 app/js/transcriber.js         divide o áudio, gerencia o worker, junta as palavras
 app/js/worker.js              Web Worker com o pipeline do Whisper
 app/js/app.js                 interface: estado, painel, lista, estilo, linha do tempo, exportação
@@ -105,7 +106,9 @@ O que cada módulo contém:
     publica para 9:16 — topo 14%, laterais 6%, rodapé 35% no Reels e 20% no Stories. O retângulo
     pontilhado forte é o do Reels (o mais apertado) e a linha fina embaixo é o limite do Stories;
   - desfazer/refazer (60 snapshots);
-  - salvamento automático no `localStorage`.
+  - salvamento automático no IndexedDB (`store.js`), um registro por vídeo;
+  - tela inicial: aurora amarela (`.drop::before`, acende no `.over`) e, quando há projetos
+    salvos, os cards de "Continuar de onde parou".
 
 ## Decisões técnicas importantes (não desfaça sem motivo)
 
@@ -162,6 +165,20 @@ O que cada módulo contém:
   thread principal e usa `document.fonts`).
 - Os arquivos ficam no IndexedDB `finalcaptions-fonts`, não no `localStorage` (que é pequeno).
 - Dá para arrastar o `.ttf`/`.otf` direto para a janela.
+
+### Projetos salvos
+
+- Ficam no IndexedDB `finalcaptions`, store `projects`, chave `nome|tamanho|data`. O `localStorage`
+  guarda só as preferências — é pequeno demais para vários projetos e não aceita binário.
+  `migrateOldProjects()` traz o que estava em `finalcaptions:project:v1:*` e apaga o original.
+- Cada registro leva `handle` (FileSystemFileHandle) e `thumb` (Blob JPEG 320 px). Com o handle,
+  clicar no card reabre o vídeo sem procurar a pasta — `fileFromHandle` pede a permissão, que
+  precisa de um clique do usuário. Sem handle (ou se o arquivo foi movido), o app abre o seletor
+  com um aviso e `loadFile(file, { project })` cola o projeto no arquivo novo, re-chaveando.
+- O handle vem de `showOpenFilePicker` ou, no arrastar, de `DataTransferItem.getAsFileSystemHandle()`
+  — que precisa ser chamado **antes** de qualquer `await`, senão o DataTransfer expira.
+- `saveNow` é assíncrono, então o `beforeunload` não serve: salvamos em `visibilitychange` e
+  `pagehide`.
 
 ### Exportação MP4
 

@@ -8,3 +8,6 @@
 
 # Vercel
 .vercel/
+
+# rascunhos de layout (não vão para o site)
+app/__*.html

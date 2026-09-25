@@ -30,14 +30,12 @@
 
     <section id="empty" class="empty">
       <div class="drop" id="dropZone">
-        <div class="drop-art" aria-hidden="true">
-          <span class="drop-frame"></span>
-          <span class="drop-line">Arraste aqui</span>
-        </div>
+        <p class="drop-hint">Arraste um vídeo para começar</p>
         <button class="btn primary lg" id="btnChoose" type="button">Escolher vídeo</button>
         <input type="file" id="fileInput" accept="video/*,.mov,.mp4,.m4v,.webm" hidden>
         <input type="file" id="fontInput" accept=".ttf,.otf,font/ttf,font/otf" hidden>
       </div>
+      <div class="recents" id="recents" hidden></div>
       <p class="env-warning" id="envWarning" hidden></p>
     </section>
 
