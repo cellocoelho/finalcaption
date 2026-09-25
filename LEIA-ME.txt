@@ -71,7 +71,9 @@ Estilo
   - "Selecionadas" muda só as que você escolheu (⌘-clique no número da legenda para
     escolher várias; ⇧-clique para um intervalo).
   - Arraste a legenda direto no vídeo para posicionar: para cima e para baixo e
-    também para os lados. Em Posição há os dois controles e o botão "Centralizar".
+    também para os lados. Chegando perto do meio ela gruda sozinha e aparece uma
+    linha amarela mostrando que está centralizada — no eixo horizontal, no vertical
+    ou nos dois. Em Posição há os dois controles ("Altura" e "Lado").
   - "Entre letras" abre ou fecha o espaço entre as letras; "Entre linhas" faz o
     mesmo com legendas de duas linhas. Os dois vão para o MP4 e para o Final Cut
     (no Final Cut o espaço entre linhas pode sair um pouco diferente).

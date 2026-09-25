@@ -104,7 +104,9 @@ O que cada módulo contém:
     do tempo volta para a cabeça; dar play toca de onde o mouse estava; a tecla S liga e desliga
     (guardado nas preferências). O seek é limitado a um por quadro com `requestAnimationFrame`;
   - arrastar o corpo de um bloco move a legenda no tempo e apara as vizinhas (as palavras andam junto);
-  - arrastar a legenda no vídeo muda a posição nos dois eixos;
+  - arrastar a legenda no vídeo muda a posição nos dois eixos, com ímã no centro: dentro de `SNAP`
+    (2,2%) o valor gruda em 50 e sai uma linha amarela (`drawCenterGuides`) no eixo que grudou.
+    As guias vivem em `dragGuides` e somem quando o arraste acaba;
   - botões de desfazer/refazer na barra de transporte, ao lado do zoom;
   - botão "Safe area": guias do Instagram só na prévia, nunca no MP4. As medidas são as que a Meta
     publica para 9:16 — topo 14%, laterais 6%, rodapé 35% no Reels e 20% no Stories. O retângulo

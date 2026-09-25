@@ -35,6 +35,9 @@ const TL_GAP = 14;       // espaço entre os blocos e a onda
 // rodapé 35% no Reels (curtidas, comentários, legenda) e 20% no Stories (barra de resposta).
 const IG_SAFE = { top: 0.14, side: 0.06, bottomReels: 0.35, bottomStories: 0.20 };
 
+const SNAP = 2.2;        // % de tolerância do ímã do centro
+let dragGuides = null;   // { x, y } enquanto a legenda está sendo arrastada no vídeo
+
 // prévia que segue o mouse: `from` é onde a cabeça de reprodução fica de verdade
 const skim = { active: false, from: 0, pending: null, raf: 0 };
 let tlDragging = false;
@@ -1267,22 +1270,39 @@ function drawSafeArea(ctx, W, H) {
   ctx.restore();
 }
 
+/** Linha do centro enquanto você arrasta a legenda, para saber que ela grudou. */
+function drawCenterGuides(ctx, W, H, g) {
+  const k = Math.max(1, H / 720);
+  ctx.save();
+  ctx.strokeStyle = '#FFD60A';
+  ctx.lineWidth = 1.5 * k;
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 4 * k;
+  if (g.x) { ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke(); }
+  if (g.y) { ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke(); }
+  ctx.restore();
+}
+
 function drawPreview() {
   const ctx = overlay.getContext('2d');
-  ctx.clearRect(0, 0, overlay.width, overlay.height);
-  if (state.safeArea) drawSafeArea(ctx, overlay.width, overlay.height);
-  if (!hasCaptions()) return;
-  const i = C.captionAt(state.captions, video.currentTime || 0);
-  let c = i >= 0 ? state.captions[i] : null;
-  let ghost = false;
-  if (!c && state.tab === 'style') {
-    c = state.captions.find((x) => state.selection.has(x.id)) || state.captions[0];
-    ghost = true;
+  const W = overlay.width, H = overlay.height;
+  ctx.clearRect(0, 0, W, H);
+  if (state.safeArea) drawSafeArea(ctx, W, H);
+  if (hasCaptions()) {
+    const i = C.captionAt(state.captions, video.currentTime || 0);
+    let c = i >= 0 ? state.captions[i] : null;
+    let ghost = false;
+    if (!c && state.tab === 'style') {
+      c = state.captions.find((x) => state.selection.has(x.id)) || state.captions[0];
+      ghost = true;
+    }
+    if (c) {
+      ctx.globalAlpha = ghost ? 0.6 : 1;
+      drawCaption(ctx, W, H, c.text, C.effectiveStyle(c, state.style));
+      ctx.globalAlpha = 1;
+    }
   }
-  if (!c) return;
-  ctx.globalAlpha = ghost ? 0.6 : 1;
-  drawCaption(ctx, overlay.width, overlay.height, c.text, C.effectiveStyle(c, state.style));
-  ctx.globalAlpha = 1;
+  if (dragGuides && (dragGuides.x || dragGuides.y)) drawCenterGuides(ctx, W, H, dragGuides);
 }
 
 function bindStage() {
@@ -1300,17 +1320,24 @@ function bindStage() {
       if (state.styleScope === 'selected' && !state.selection.size) state.styleScope = 'all';
     }
     const r = overlay.getBoundingClientRect();
-    applyStyle({
-      posX: clamp(((e.clientX - r.left) / r.width) * 100, 5, 95),
-      posY: clamp(((e.clientY - r.top) / r.height) * 100, 5, 95),
-    }, 'pos');
+    let x = clamp(((e.clientX - r.left) / r.width) * 100, 5, 95);
+    let y = clamp(((e.clientY - r.top) / r.height) * 100, 5, 95);
+    const noCentroX = Math.abs(x - 50) <= SNAP;
+    const noCentroY = Math.abs(y - 50) <= SNAP;
+    if (noCentroX) x = 50;
+    if (noCentroY) y = 50;
+    dragGuides = { x: noCentroX, y: noCentroY };
+    applyStyle({ posX: x, posY: y }, 'pos');
   });
   const end = () => {
     if (!drag) return;
     overlay.classList.remove('dragging');
+    const guiasVisiveis = !!dragGuides;
+    dragGuides = null;
     if (!drag.moved) togglePlay();
     else if (state.tab === 'style') renderPanel();
     drag = null;
+    if (guiasVisiveis) drawPreview();
   };
   overlay.addEventListener('pointerup', end);
   overlay.addEventListener('pointercancel', end);
