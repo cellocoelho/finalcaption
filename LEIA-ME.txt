@@ -1,0 +1,112 @@
+FinalCaptions — legendas automáticas, do jeito CapCut, rodando no seu Mac
+=========================================================================
+
+COMO ABRIR
+----------
+1. Dê dois cliques no arquivo "Abrir FinalCaptions.command".
+2. Abre uma janelinha do Terminal (deixe aberta) e o Google Chrome com o app.
+3. Arraste um vídeo para a janela. Pronto.
+
+Para fechar o app, feche a janelinha do Terminal.
+
+Se o Mac disser que o arquivo "não pode ser aberto" (só acontece na primeira vez):
+  - Abra Ajustes do Sistema › Privacidade e Segurança.
+  - Role até o fim e clique em "Abrir Mesmo Assim" ao lado de "Abrir FinalCaptions.command".
+  - Dê dois cliques no arquivo de novo.
+
+Use o Google Chrome. Ele tem os recursos de vídeo e de GPU que o app precisa.
+
+
+PRIMEIRA TRANSCRIÇÃO
+--------------------
+Na primeira vez, o app baixa o "modelo de voz" (a inteligência que entende a fala):
+  - Rápida ........ ~150 MB (menos precisa)
+  - Equilibrada ... ~500 MB (recomendada)
+  - Máxima ........ ~1,6 GB (mais precisa, mais lenta)
+Isso acontece uma vez só por modelo. Depois ele fica guardado no Chrome e a
+transcrição funciona sem internet.
+
+Tudo roda no seu Mac. O vídeo nunca é enviado para lugar nenhum.
+
+
+COMO USAR
+---------
+Legendas
+  - Clique numa legenda para editar. Enter vai para a próxima; Shift+Enter quebra linha.
+  - Passe o mouse sobre a legenda para Dividir (no ponto do cursor), Juntar com a
+    próxima, Adicionar uma nova depois dela, ou Excluir.
+  - Para criar uma legenda nova, use o botão "+ Legenda" na barra embaixo do vídeo,
+    o "+" na linha da legenda, o "+" que aparece no canto do bloco na linha do tempo
+    quando você passa o mouse, ou a tecla N. Ela sempre entra logo DEPOIS da legenda
+    selecionada, já vazia e pronta para você digitar.
+    Se não houver espaço livre ali, ela pega um pedaço do começo da legenda seguinte.
+    Enquanto estiver vazia, ela não aparece no vídeo nem nos arquivos exportados.
+  - No topo: dividir por Palavras (1 a 12 por legenda), Linhas ou Frases.
+  - Na linha do tempo embaixo do vídeo: clique para ir ao ponto, arraste as bordas de
+    um bloco para ajustar o início e o fim, arraste o meio do bloco para mover a
+    legenda no tempo, dois cliques para editar o texto.
+  - A linha do tempo baixa demais? A faixa cinza logo acima dela é uma alça: clique
+    em qualquer ponto dela e arraste para cima ou para baixo. Ela cresce até ocupar
+    boa parte da janela. Dois cliques na alça volta ao tamanho normal.
+    Os blocos de legenda continuam sempre do mesmo tamanho: o espaço que você abre
+    vai todo para a onda do áudio, que fica maior e mais fácil de ler.
+  - Passe o mouse por cima da linha do tempo (sem clicar) e o vídeo mostra aquele
+    ponto na hora, igual ao Final Cut. A linha amarela é onde o mouse está; a preta
+    é onde a reprodução está de verdade. Tirando o mouse, volta para a preta.
+    Clicando, a preta vai para lá. A tecla S liga e desliga isso.
+  - Ao lado dos botões de zoom (− +) ficam Desfazer e Refazer.
+  - Menu "…": Realinhar texto com o áudio, Transcrever de novo, Desfazer, Refazer.
+
+Estilo
+  - "Todas as legendas" muda o visual de todas.
+  - "Selecionadas" muda só as que você escolheu (⌘-clique no número da legenda para
+    escolher várias; ⇧-clique para um intervalo).
+  - Arraste a legenda direto no vídeo para posicionar: para cima e para baixo e
+    também para os lados. Em Posição há os dois controles e o botão "Centralizar".
+  - Fonte: além das da lista, escolha "Enviar fonte do computador (.ttf/.otf)…" e
+    escolha o arquivo (ou arraste o .ttf/.otf para a janela do app). A fonte fica
+    guardada e vale para a prévia e para o MP4. O × ao lado do nome remove.
+    Para o Final Cut mostrar igual, a fonte também precisa estar instalada no Mac
+    (abra o arquivo e clique em "Instalar" no Livro de Fontes).
+  - Botão "Safe area" (ao lado do zoom): mostra a área segura do Instagram em cima
+    da prévia, com as medidas oficiais da Meta para vídeo 9:16 — 14% no topo, 6% nas
+    laterais, 35% embaixo no Reels e 20% embaixo no Stories. O retângulo pontilhado
+    é o limite do Reels; a linha fininha mais abaixo é até onde dá para descer num
+    Stories. É só um guia — não aparece no vídeo exportado.
+
+Atalhos: Espaço (play/pausa), N (nova legenda), S (prévia seguindo o mouse),
+⌘Z (desfazer), ⇧⌘Z (refazer),
+setas ← → (legenda anterior/próxima), Delete (excluir as selecionadas).
+
+O app salva sozinho. Se abrir o mesmo vídeo de novo, as legendas voltam como estavam.
+
+
+EXPORTAR (botão "Exportar")
+---------------------------
+Vídeo com legenda (MP4)
+  Grava a legenda na imagem, com o estilo exatamente como aparece na prévia.
+
+Arquivo de legenda (SRT)
+  Para YouTube, Instagram, players e editores.
+
+Final Cut Pro (FCPXML)
+  1. Dê dois cliques no arquivo baixado. O Final Cut importa um projeto
+     "<nome do vídeo> – Legendas".
+  2. Abra esse projeto, clique na timeline, selecione todos os titles (⌘A) e copie (⌘C).
+  3. No seu projeto, coloque o playhead no início do vídeo e use
+     Editar › Colar como Clipe Conectado (⌥V).
+  Cada legenda vira um Basic Title editável, com fonte, cor, contorno e posição.
+
+
+LIMITES CONHECIDOS
+------------------
+  - Vídeos ProRes não aparecem na prévia do Chrome. Exporte uma versão H.264 ou HEVC.
+  - A caixa de fundo não existe no Basic Title, então não vai para o Final Cut
+    (vai no MP4 normalmente).
+  - Vídeos muito longos (mais de ~1 hora) usam bastante memória na transcrição.
+  - A primeira transcrição precisa de internet para baixar o modelo de voz.
+
+
+Bibliotecas usadas (código aberto, licenças na pasta app/vendor):
+Transformers.js (Hugging Face, Apache 2.0), Mediabunny (MPL 2.0),
+modelos Whisper (OpenAI, MIT).

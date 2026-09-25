@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FinalCaptions</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231D1D1F'/%3E%3Crect x='7' y='19' width='18' height='5' rx='2.5' fill='%23FFD60A'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" data-view="empty">
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#1D1D1F"/><rect x="7" y="19" width="18" height="5" rx="2.5" fill="#FFD60A"/></svg>
+        <span>FinalCaptions</span>
+      </div>
+      <div class="file-name" id="fileName"></div>
+      <div class="top-actions">
+        <button class="btn ghost" id="btnNew" type="button">Outro vídeo</button>
+        <div class="menu-wrap">
+          <button class="btn primary" id="btnExport" type="button" aria-haspopup="menu" disabled>Exportar</button>
+          <div class="menu" id="exportMenu" role="menu" hidden>
+            <button role="menuitem" data-export="mp4"><strong>Vídeo com legenda</strong><span>MP4 com a legenda gravada na imagem</span></button>
+            <button role="menuitem" data-export="srt"><strong>Arquivo de legenda</strong><span>SRT para YouTube, Instagram e players</span></button>
+            <button role="menuitem" data-export="fcpxml"><strong>Final Cut Pro</strong><span>FCPXML com um title editável por legenda</span></button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section id="empty" class="empty">
+      <div class="drop" id="dropZone">
+        <div class="drop-art" aria-hidden="true">
+          <span class="drop-frame"></span>
+          <span class="drop-line">Arraste aqui</span>
+        </div>
+        <button class="btn primary lg" id="btnChoose" type="button">Escolher vídeo</button>
+        <input type="file" id="fileInput" accept="video/*,.mov,.mp4,.m4v,.webm" hidden>
+        <input type="file" id="fontInput" accept=".ttf,.otf,font/ttf,font/otf" hidden>
+      </div>
+      <p class="env-warning" id="envWarning" hidden></p>
+    </section>
+
+    <main id="workspace" class="workspace">
+      <section class="stage-col">
+        <div class="stage" id="stage">
+          <video id="video" playsinline preload="auto"></video>
+          <canvas id="overlay" aria-label="Prévia da legenda. Arraste para mudar a posição."></canvas>
+          <div class="stage-message" id="stageMessage" hidden></div>
+        </div>
+        <div class="transport">
+          <button class="icon-btn" id="btnPlay" type="button" aria-label="Reproduzir"></button>
+          <span class="time" id="timeLabel">00:00 / 00:00</span>
+          <span class="hint" id="stageHint">Espaço reproduz. Passe o mouse na linha do tempo para espiar (tecla S liga e desliga).</span>
+          <button class="chip strong" id="btnAdd" type="button" title="Adicionar uma legenda depois da selecionada (tecla N)" disabled>+ Legenda</button>
+          <button class="chip" id="btnSafe" type="button" aria-pressed="false" title="Mostra a área segura do Instagram (Reels e Stories)">Safe area</button>
+          <div class="zoom" role="group" aria-label="Desfazer e refazer">
+            <button class="icon-btn small" id="btnUndo" type="button" aria-label="Desfazer" title="Desfazer (⌘Z)"></button>
+            <button class="icon-btn small" id="btnRedo" type="button" aria-label="Refazer" title="Refazer (⇧⌘Z)"></button>
+          </div>
+          <div class="zoom" role="group" aria-label="Zoom da linha do tempo">
+            <button class="icon-btn small" id="zoomOut" type="button" aria-label="Diminuir zoom">−</button>
+            <button class="icon-btn small" id="zoomIn" type="button" aria-label="Aumentar zoom">+</button>
+          </div>
+        </div>
+        <div class="tl-grip" id="tlGrip" role="separator" aria-label="Altura da linha do tempo" title="Arraste para cima ou para baixo. Duplo clique volta ao tamanho padrão."><span></span></div>
+        <div class="timeline" id="timeline">
+          <div class="tl-inner" id="tlInner">
+            <canvas class="tl-wave" id="tlWave"></canvas>
+            <div class="tl-blocks" id="tlBlocks"></div>
+            <div class="tl-playhead" id="tlPlayhead"></div>
+            <div class="tl-skimmer" id="tlSkimmer" hidden></div>
+          </div>
+          <div class="tl-status" id="tlStatus" hidden></div>
+        </div>
+      </section>
+      <aside class="panel" id="panel" aria-label="Legendas e estilo"></aside>
+    </main>
+
+    <div class="modal-backdrop" id="modal" hidden>
+      <div class="modal" id="modalBody" role="dialog" aria-modal="true"></div>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </div>
+  <script>
+    if (location.protocol === 'file:') {
+      var w = document.getElementById('envWarning');
+      w.hidden = false;
+      w.textContent = 'Abra o FinalCaptions pelo arquivo “Abrir FinalCaptions.command” (fora da pasta app), não direto pelo index.html.';
+      document.getElementById('btnChoose').disabled = true;
+    }
+  </script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
