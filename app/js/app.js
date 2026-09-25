@@ -667,18 +667,30 @@ function runReplace() {
  * `live: false` só avisa quando o usuário solta — necessário quando a mudança remonta
  * o painel (a divisão das legendas), senão o próprio input some no meio do arraste.
  */
-function barSlider(label, value, min, max, step, onChange, fmt = (v) => v, { live = true } = {}) {
-  const pct = (v) => `${Math.max(0, Math.min(100, ((v - min) / (max - min)) * 100))}%`;
+function barSlider(label, value, min, max, step, onChange, fmt = (v) => v, { live = true, origin = null } = {}) {
+  // de onde o preenchimento parte: do começo nos controles normais, do zero (ou do
+  // centro) naqueles em que o valor vai para os dois lados
+  const zero = origin != null ? origin : (min < 0 ? 0 : min);
+  const at = (v) => Math.max(0, Math.min(1, (v - min) / (max - min)));
+  const z = at(zero);
   const fill = h('span', { class: 'bar-fill' });
-  fill.style.width = pct(value);
-  const out = h('span', { class: 'bar-value' }, String(fmt(value)));
-  const paint = (v) => { fill.style.width = pct(v); out.textContent = String(fmt(v)); };
+  const mark = h('span', { class: 'bar-mark' });
+  const out = h('span', { class: 'bar-value' });
+  const paint = (v) => {
+    const p = at(v);
+    const a = Math.min(p, z), b = Math.max(p, z);
+    fill.style.left = `${a * 100}%`;
+    fill.style.width = `${(b - a) * 100}%`;
+    mark.style.left = `${p * 100}%`;
+    out.textContent = String(fmt(v));
+  };
+  paint(value);
   const input = h('input', {
     type: 'range', min, max, step, value: String(value), 'aria-label': label,
     oninput: (e) => { const v = +e.target.value; paint(v); if (live) onChange(v); },
     onchange: (e) => { if (!live) onChange(+e.target.value); },
   });
-  return h('label', { class: 'bar' }, input, fill, h('span', { class: 'bar-name' }, label), out);
+  return h('label', { class: 'bar' }, input, fill, mark, h('span', { class: 'bar-name' }, label), out);
 }
 
 function regroup(change) {
@@ -1030,7 +1042,8 @@ function renderStyleBody() {
     segmented(WEIGHTS.map(([w, n]) => [w, n]), st.weight, (v) => { applyStyle({ weight: v }); rerender(); }, 'Peso'),
     bar('Tamanho', 'size', 24, 180, 1),
     bar('Entre letras', 'tracking', -5, 30, 0.5, (v) => `${v}%`),
-    bar('Entre linhas', 'lineHeight', 0.9, 2.2, 0.02, (v) => v.toFixed(2)),
+    barSlider('Entre linhas', st.lineHeight, 0.9, 2.2, 0.02, (v) => applyStyle({ lineHeight: v }, 'lineHeight'),
+      (v) => v.toFixed(2), { origin: C.DEFAULT_STYLE.lineHeight }),
     h('div', { class: 'opt' }, h('span', null, 'Cor'), swatches('color')),
     toggle('stroke', 'Contorno'),
     st.stroke ? bar('Espessura', 'strokeWidth', 1, 16, 0.5) : null,
@@ -1039,7 +1052,8 @@ function renderStyleBody() {
     st.box ? h('div', { class: 'opt' }, h('span', null, 'Cor da caixa'), swatches('boxColor')) : null,
     st.box ? bar('Opacidade', 'boxOpacity', 0.1, 1, 0.05, pct) : null,
     bar('Altura', 'posY', 5, 95, 1, deg),
-    bar('Lado', 'posX', 5, 95, 1, (v) => (Math.round(v) === 50 ? 'centro' : deg(v))),
+    barSlider('Lado', st.posX, 5, 95, 1, (v) => applyStyle({ posX: v }, 'posX'),
+      (v) => (Math.round(v) === 50 ? 'centro' : deg(v)), { origin: 50 }),
     segmented([['original', 'Como falado'], ['upper', 'MAIÚSCULAS'], ['lower', 'minúsculas']], st.textCase,
       (v) => { applyStyle({ textCase: v }); rerender(); }, 'Maiúsculas'),
     toggle('stripPunct', 'Remover pontuação'),

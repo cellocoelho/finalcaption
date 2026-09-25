@@ -38,8 +38,12 @@ export function drawCaption(ctx, W, H, text, st) {
   const px = Math.max(4, st.size * scale);
   ctx.save();
   ctx.font = fontCss(st, px);
-  // espaço entre letras: o Chrome tem ctx.letterSpacing; measureText já leva em conta
-  if ('letterSpacing' in ctx) ctx.letterSpacing = `${(((st.tracking ?? 0) / 100) * px).toFixed(2)}px`;
+  // Espaço entre letras. O Chrome soma o espaço DEPOIS da última letra também, então
+  // measureText devolve uma largura maior que a tinta e o texto centralizado sai
+  // deslocado meio espaço para a esquerda — daí o `+ gap / 2` no desenho e o desconto
+  // na largura da caixa.
+  const gap = 'letterSpacing' in ctx ? ((st.tracking ?? 0) / 100) * px : 0;
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${gap.toFixed(2)}px`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
@@ -53,9 +57,10 @@ export function drawCaption(ctx, W, H, text, st) {
   const cy = (st.posY / 100) * H;
   const top = cy - (lineH * lines.length) / 2 + lineH / 2;
 
+  const drawX = cx + gap / 2;
   if (st.box) {
     const padX = px * 0.45, padY = px * 0.22;
-    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width)) - gap;
     const bw = widest + padX * 2;
     const bh = lineH * lines.length + padY * 2;
     const r = Math.min(px * 0.3, bh / 2);
@@ -75,11 +80,11 @@ export function drawCaption(ctx, W, H, text, st) {
     if (st.stroke && st.strokeWidth > 0) {
       ctx.strokeStyle = st.strokeColor;
       ctx.lineWidth = st.strokeWidth * 2 * scale; // traço centrado no contorno: metade fica por fora
-      ctx.strokeText(line, cx, y);
+      ctx.strokeText(line, drawX, y);
       ctx.shadowColor = 'transparent';
     }
     ctx.fillStyle = st.color;
-    ctx.fillText(line, cx, y);
+    ctx.fillText(line, drawX, y);
     ctx.shadowColor = 'transparent';
   });
   ctx.restore();

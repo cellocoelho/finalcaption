@@ -143,8 +143,10 @@ O que cada módulo contém:
 
 ### Estilo
 
-- `tracking` é o espaço entre letras em % do tamanho da fonte (`ctx.letterSpacing`, só no Chrome;
-  `measureText` já conta) e `lineHeight` o espaço entre linhas em múltiplos do tamanho (padrão
+- `tracking` é o espaço entre letras em % do tamanho da fonte (`ctx.letterSpacing`, só no Chrome).
+  **Atenção:** o Chrome soma o espaço depois da última letra também, então `measureText` devolve
+  mais que a tinta e o texto centralizado sai deslocado meio espaço para a esquerda. `drawCaption`
+  compensa com `+ gap / 2` no desenho e desconta o `gap` na largura da caixa de fundo e `lineHeight` o espaço entre linhas em múltiplos do tamanho (padrão
   1,18). No FCPXML viram `tracking` (em pontos) e `lineSpacing` (% a partir de 1,18) — este último
   é aproximação, porque o padrão do Final Cut não é o mesmo.
 - Tamanhos em px numa altura de referência de 1080. `posY` é a porcentagem a partir do topo e
@@ -213,7 +215,11 @@ O painel da direita segue uma linguagem própria, tirada das referências do Cel
   desenha o preenchimento (com `min-width` para o traço não cair em cima do rótulo), nome à
   esquerda e valor à direita. Use `barSlider()`. **Quando a mudança remonta o painel** (os
   parâmetros de divisão, que chamam `regroup`), passe `{ live: false }`: senão o próprio input é
-  destruído no primeiro evento do arraste e o slider fica travado;
+  destruído no primeiro evento do arraste e o slider fica travado. O preenchimento é sempre real
+  (nada de piso): ele sai da origem até o valor, e a origem é o começo nos controles normais,
+  o zero quando `min < 0`, ou o que vier em `{ origin }` (o centro em "Lado", o 1,18 em "Entre
+  linhas"). No valor de origem não há preenchimento nenhum, só a marca. A marca (`.bar-mark`) é
+  partida em dois pedaços, topo e base, para nunca cruzar o rótulo;
 - na lista, a legenda clicada fica amarela e mostra os quatro ícones de ação. Não existe barra de
   ações no rodapé — foi decisão do Cello.
 
