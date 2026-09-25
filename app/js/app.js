@@ -26,6 +26,7 @@ const state = {
 };
 
 const TL_MIN = 92, TL_MAX = 560, TL_DEFAULT = 150;
+const WAVE_MAX_H = 96, WAVE_PAD = 12;   // altura máxima da onda e folga mínima em volta
 
 // Área segura da Meta para 9:16 (medidas de 1080x1920): topo 14%, laterais 6%,
 // rodapé 35% no Reels (curtidas, comentários, legenda) e 20% no Stories (barra de resposta).
@@ -1196,11 +1197,13 @@ function drawWave() {
   ctx.clearRect(0, 0, w, hgt);
   if (!state.peaks) return;
   ctx.fillStyle = '#cfcfd6';
-  // os blocos têm altura fixa (CSS); a onda ocupa todo o resto da linha do tempo
-  const top = tlBlocks.offsetTop + tlBlocks.offsetHeight + 10;
-  const bottom = hgt - 8;
-  const mid = (top + bottom) / 2;
-  const amp = Math.max(4, (bottom - top) / 2);
+  // Nada estica: blocos e onda têm altura fixa. Crescer a linha do tempo só abre
+  // respiro — a onda fica centrada na área livre embaixo dos blocos.
+  const top = tlBlocks.offsetTop + tlBlocks.offsetHeight;
+  const area = Math.max(0, hgt - top);
+  const waveH = Math.max(16, Math.min(WAVE_MAX_H, area - WAVE_PAD * 2));
+  const mid = top + area / 2;
+  const amp = waveH / 2;
   const scroll = timeline.scrollLeft;
   for (let x = 0; x < w; x += 2) {
     const b0 = Math.floor(((scroll + x) / state.zoom) * 100);

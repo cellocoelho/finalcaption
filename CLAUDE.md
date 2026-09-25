@@ -89,9 +89,10 @@ O que cada módulo contém:
   - aba Estilo com escopo "Todas as legendas" ou "Selecionadas";
   - linha do tempo com forma de onda, blocos e bordas arrastáveis;
   - a altura da linha do tempo é ajustável pela alça `#tlGrip` (92 px até 70% da janela, no máximo
-    560; duplo clique volta a 150). A faixa de pegada é a largura toda, 18 px de altura. Os blocos
-    têm altura fixa (48 px no CSS, `.tl-blocks`); o espaço que sobra vai todo para a forma de onda,
-    que `drawWave` mede a partir de `tlBlocks.offsetTop + offsetHeight` — o CSS é quem manda;
+    560; duplo clique volta a 150). A faixa de pegada é a largura toda, 18 px de altura. **Nada
+    estica:** os blocos têm altura fixa (48 px no CSS, `.tl-blocks`) e a onda tem teto de
+    `WAVE_MAX_H` (96 px), centrada na área livre abaixo dos blocos — o espaço que sobra vira
+    respiro. `drawWave` lê `tlBlocks.offsetTop + offsetHeight`, então o CSS é quem manda;
   - prévia seguindo o mouse (skimming, como no Final Cut): `#tlSkimmer` amarelo acompanha o ponteiro
     e o vídeo mostra aquele ponto, enquanto a cabeça preta fica parada em `skim.from`. Sair da linha
     do tempo volta para a cabeça; dar play toca de onde o mouse estava; a tecla S liga e desliga
